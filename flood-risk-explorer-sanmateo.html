@@ -1,0 +1,2308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>San Mateo County Flood Risk Community Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --forest: #0A2816;
+  --forest2: #1F3C0F;
+  --forest-light: #1A522E;
+  --amber: #E07B2A;
+  --amber-light: #F5A44A;
+  --amber-pale: #FFF3E6;
+  --teal: #1B8E8E;
+  --teal-light: #26BFBF;
+  --teal-pale: #E6F6F6;
+  --red: #C0392B;
+  --red-pale: #FDEDEC;
+  --green: #1E7E46;
+  --green-pale: #E8F5EE;
+  --blue: #1B5FA8;
+  --blue-light: #4A8FD6;
+  --blue-pale: #E7F0FA;
+  --navy: #0E2A47;
+  --purple: #6B4A9E;
+  --purple-pale: #F1ECF8;
+  --renter: #B8336A;
+  --renter-pale: #FBEAF1;
+  --slate: #F0F2F5;
+  --slate2: #E2E6EB;
+  --white: #FFFFFF;
+  --text: #111827;
+  --text2: #4B5563;
+  --text3: #9CA3AF;
+  --border: rgba(15,31,60,0.1);
+  --border2: rgba(15,31,60,0.18);
+  --radius: 8px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'DM Mono', 'Courier New', monospace;
+}
+
+body { font-family: var(--font); background: var(--slate); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; max-height: 100vh; overflow: hidden; }
+
+/* ── Header ── */
+.header {
+  background: var(--navy);
+  padding: 0 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 58px; flex-shrink: 0; gap: 12px;
+}
+.header-brand { display: flex; align-items: center; gap: 12px; }
+.header-logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--blue-light) 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.header-title { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.01em; }
+.header-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.view-tabs {
+  display: flex; background: rgba(255,255,255,0.08);
+  border-radius: var(--radius); overflow: hidden; border: 1px solid rgba(255,255,255,0.12);
+}
+.view-tab {
+  padding: 6px 14px; font-size: 12px; font-weight: 500; font-family: var(--font);
+  background: transparent; border: none; color: rgba(255,255,255,0.6);
+  cursor: pointer; transition: all .15s; letter-spacing: 0.01em;
+}
+.view-tab.active { background: var(--blue); color: #fff; }
+.view-tab:hover:not(.active) { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* ── Metrics bar ── */
+.metrics {
+  display: grid; grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 0; background: #16324F; flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.metric { padding: 10px 20px; border-right: 1px solid rgba(255,255,255,0.06); }
+.metric:last-child { border-right: none; }
+.metric-label { font-size: 10px; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: .08em; font-weight: 500; }
+.metric-value { font-size: 22px; font-weight: 700; margin-top: 1px; font-family: var(--mono); }
+.metric-value.metric-value-sm { font-size: 15px; line-height: 1.3; }
+.metric-sub { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
+.mv-amber { color: var(--amber-light); }
+.mv-teal { color: var(--teal-light); }
+.mv-blue { color: var(--blue-light); }
+.mv-red { color: #F07066; }
+.mv-white { color: #E8EDF4; }
+.mv-crs-yes { color: #8FD6D6; }
+.mv-crs-no { color: rgba(232,237,244,0.55); }
+
+/* ── Body layout ── */
+.body {
+  display: grid;
+  grid-template-columns: 232px 1fr 280px;
+  flex: 1; overflow: hidden; min-height: 0;
+}
+
+/* Left sidebar always visible */
+.sidebar {
+  background: var(--white); border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 0; display: flex; flex-direction: column;
+  grid-row: 1; grid-column: 1;
+}
+
+/* Center + right area — views stacked, only one visible */
+.view-area {
+  grid-row: 1; grid-column: 2 / 4;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  min-height: 0; overflow: hidden;
+  position: relative;
+}
+
+/* Table & Chart views take full width */
+.view-area.table-active,
+.view-area.chart-active {
+  grid-template-columns: 1fr;
+}
+
+/* ── Map view ── */
+#view-map {
+  display: contents; /* children participate in view-area grid */
+}
+#view-map.hidden { display: none; }
+
+.map-wrap {
+  position: relative; overflow: hidden; background: #dbe6ee;
+  grid-column: 1; grid-row: 1;
+}
+
+
+/* ── Address search ── */
+.addr-search { position:absolute; top:12px; left:56px; width:min(380px, calc(100% - 76px)); z-index:800; font-family:inherit; }
+.addr-search form { display:flex; align-items:center; background:#fff; border-radius:10px; box-shadow:0 2px 10px rgba(14,42,71,.22), 0 0 0 1px rgba(14,42,71,.08); overflow:hidden; }
+.addr-search form:focus-within { box-shadow:0 2px 12px rgba(27,95,168,.35), 0 0 0 2px #1B5FA8; }
+.addr-search svg { flex:none; margin-left:11px; color:#5b7189; }
+.addr-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; padding:10px 8px; font:500 13px/1.2 inherit; font-family:inherit; color:#0E2A47; }
+.addr-search input::placeholder { color:#8497ab; font-weight:400; }
+.addr-search .as-clear { display:none; border:0; background:none; cursor:pointer; font-size:18px; line-height:1; color:#8497ab; padding:0 6px; }
+.addr-search .as-clear:hover { color:#0E2A47; }
+.addr-search .as-go { border:0; cursor:pointer; background:#1B5FA8; color:#fff; font:600 12px inherit; font-family:inherit; padding:0 14px; align-self:stretch; }
+.addr-search .as-go:hover { background:#154d8a; }
+.addr-search .as-list { display:none; margin-top:6px; background:#fff; border-radius:10px; box-shadow:0 4px 16px rgba(14,42,71,.25); overflow:hidden; max-height:260px; overflow-y:auto; }
+.addr-search .as-list button { display:block; width:100%; text-align:left; border:0; background:#fff; padding:9px 12px; font:500 12.5px/1.35 inherit; font-family:inherit; color:#0E2A47; cursor:pointer; border-bottom:1px solid #eef2f6; }
+.addr-search .as-list button:last-child { border-bottom:0; }
+.addr-search .as-list button:hover { background:#eef5fc; }
+.addr-search .as-msg { padding:10px 12px; font-size:12.5px; color:#5b7189; }
+.addr-pin { width:26px; height:26px; }
+.addr-pin div { width:26px; height:26px; border-radius:50% 50% 50% 0; background:#C0392B; transform:rotate(-45deg); box-shadow:0 2px 6px rgba(0,0,0,.4); border:2px solid #fff; position:relative; }
+.addr-pin div::after { content:''; position:absolute; width:8px; height:8px; border-radius:50%; background:#fff; top:50%; left:50%; margin:-4px 0 0 -4px; }
+
+/* Leaflet map fills container */
+#leaflet-map { width: 100%; height: 100%; }
+
+/* Leaflet GeoJSON layer styles — applied via Leaflet's SVG pane */
+.leaflet-overlay-pane svg { pointer-events: auto; }
+.bg-label-div {
+  font-size: 9.5px; font-weight: 700; color: #1a1a2e;
+  font-family: 'Inter', sans-serif; pointer-events: none;
+  text-shadow: 0 0 3px white, 0 0 3px white, 0 0 3px white;
+  white-space: nowrap;
+}
+
+/* Legend over map */
+.choro-legend {
+  position: absolute; bottom: 40px; left: 14px; z-index: 500;
+  background: rgba(255,255,255,0.94); border: 1px solid rgba(0,0,0,0.12);
+  border-radius: var(--radius-lg); padding: 10px 12px;
+  font-size: 10px; font-family: var(--font); color: #333; min-width: 150px;
+  box-shadow: var(--shadow-md);
+}
+.legend-title { font-weight: 700; font-size: 11px; margin-bottom: 5px; color: var(--navy); }
+.legend-grad { height: 8px; border-radius: 4px; margin: 4px 0 3px; }
+.legend-ends-row { display: flex; justify-content: space-between; color: var(--text2); }
+.legend-nodata-row { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: var(--text2); }
+.legend-nodata-swatch { width: 10px; height: 10px; border-radius: 2px; background: repeating-linear-gradient(45deg, #d7dbe0, #d7dbe0 2px, #eceff2 2px, #eceff2 5px); border: 1px solid #c7cdd4; flex-shrink: 0; }
+
+/* Tooltip */
+.map-tooltip {
+  display: none;
+  position: absolute;
+  background: #ffffff;
+  border: 1px solid rgba(15,31,60,0.14);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.13);
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 12px;
+  color: #111827;
+  pointer-events: none;
+  z-index: 600;
+  min-width: 460px;
+  max-width: 500px;
+  overflow: hidden;
+}
+
+.tt-header {
+  background: var(--navy);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 14px;
+  letter-spacing: -0.01em;
+}
+.tt-header .tt-header-sub { display: block; font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.55); margin-top: 1px; }
+
+.tt-body {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.tt-left {
+  flex: 0 0 168px;
+  padding: 14px 12px;
+  background: #fafafa;
+  display: flex; flex-direction: column; align-items: center;
+}
+
+.tt-panel-divider {
+  width: 1px;
+  background: rgba(15,31,60,0.1);
+  flex-shrink: 0;
+}
+
+.tt-right {
+  flex: 1;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+/* Left panel — donut chart */
+.tt-pie-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+.tt-pie-center-pct {
+  font-family: 'DM Mono', monospace;
+  font-weight: 800;
+}
+.tt-pie-legend { margin-top: 10px; width: 100%; }
+.tt-pie-legend-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #374151; margin-bottom: 4px; }
+.tt-pie-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.tt-pie-legend-val { margin-left: auto; font-family: 'DM Mono', monospace; font-weight: 700; }
+
+/* Right panel — horizontal bars */
+.tt-bar-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+.tt-hbar-row { margin-bottom: 8px; }
+.tt-hbar-meta { display: flex; justify-content: space-between; font-size: 10px; color: #6b7280; margin-bottom: 3px; }
+.tt-hbar-meta .tt-hbar-val { font-family: 'DM Mono', monospace; font-weight: 700; color: #111827; }
+.tt-hbar-track { height: 7px; border-radius: 4px; background: #eef0f3; overflow: hidden; }
+.tt-hbar-fill { height: 100%; border-radius: 4px; transition: width .3s ease; }
+
+.tt-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(15,31,60,0.08); }
+.tt-stat-grid-3 { grid-template-columns: 1fr 1fr 1fr; gap: 6px 10px; }
+.tt-stat { }
+.tt-stat-key { font-size: 9.5px; color: #6b7280; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.tt-stat-val { font-size: 12px; font-weight: 700; font-family: 'DM Mono', monospace; color: #111827; }
+
+/* Extra full-width section: CRS */
+.tt-extra {
+  border-top: 1px solid rgba(15,31,60,0.1);
+  padding: 10px 14px;
+  background: var(--purple-pale);
+}
+.tt-extra-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--purple);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tt-crs-row { font-size: 11px; color: var(--text); display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+.tt-crs-name { font-weight: 600; }
+.tt-crs-count { font-family: 'DM Mono', monospace; font-weight: 700; color: var(--purple); flex-shrink: 0; }
+.tt-crs-empty { font-size: 10.5px; color: #9ca3af; font-style: italic; }
+
+/* Map source attribution override */
+.map-source { position: absolute; bottom: 10px; right: 12px; font-size: 10px; color: rgba(0,0,0,0.45); background: rgba(255,255,255,0.82); padding: 3px 7px; border-radius: 4px; z-index: 500; }
+
+/* No community / loading states */
+.no-community-msg {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px; color: var(--navy);
+  background: rgba(200,217,232,0.85); z-index: 700;
+}
+.no-community-msg.hidden { display: none; }
+.no-community-msg .big-icon { font-size: 48px; opacity: .4; }
+.no-community-msg h3 { font-size: 16px; font-weight: 700; color: var(--navy); }
+.no-community-msg p { font-size: 12px; color: var(--text2); text-align: center; max-width: 260px; }
+
+.map-loading {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  background: rgba(200,217,232,0.7); flex-direction: column; gap: 10px; font-size: 13px;
+  color: var(--navy); z-index: 700;
+}
+.map-loading.show { display: flex; }
+.spinner { width: 26px; height: 26px; border: 3px solid rgba(15,31,60,0.15); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Sidebar ── */
+.sidebar-section { padding: 16px 16px 14px; border-bottom: 1px solid var(--border); }
+.sec-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+
+.community-select-wrap { position: relative; }
+.community-select-wrap::after {
+  content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--blue); font-size: 11px; pointer-events: none;
+}
+select.community-sel {
+  width: 100%; padding: 9px 28px 9px 12px; font-size: 13px; font-weight: 500;
+  font-family: var(--font); border: 1.5px solid var(--border2); border-radius: var(--radius);
+  background: var(--white); color: var(--text); cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+select.community-sel:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(27,95,168,0.15); }
+.community-info {
+  margin-top: 8px; padding: 8px 10px; background: var(--blue-pale);
+  border-radius: var(--radius); border-left: 3px solid var(--blue);
+}
+.community-info-name { font-size: 11px; font-weight: 600; color: var(--blue); margin-bottom: 2px; }
+.community-info-detail { font-size: 10px; color: var(--text2); }
+
+.radio-group { display: flex; flex-direction: column; gap: 8px; }
+.radio-row { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 12px; color: var(--text); line-height: 1.3; }
+.radio-row input[type=radio] { accent-color: var(--blue); cursor: pointer; margin-top: 2px; flex-shrink: 0; }
+.radio-row .radio-note { display: block; font-size: 10px; color: var(--text3); margin-top: 1px; }
+
+.layer-row { display: flex; align-items: center; gap: 9px; padding: 5px 0; cursor: pointer; user-select: none; }
+.toggle { width: 32px; height: 18px; border-radius: 9px; border: 1.5px solid var(--border2); background: var(--slate2); position: relative; flex-shrink: 0; transition: background .2s, border-color .2s; cursor: pointer; }
+.toggle-knob { width: 12px; height: 12px; border-radius: 50%; background: var(--text3); position: absolute; top: 2px; left: 2px; transition: all .2s; }
+.toggle.on-teal { background: var(--teal); border-color: var(--teal); }
+.toggle.on-teal .toggle-knob { background: white; left: 16px; }
+.toggle.on-amber { background: var(--amber); border-color: var(--amber); }
+.toggle.on-amber .toggle-knob { background: white; left: 16px; }
+.toggle.on-red { background: var(--red); border-color: var(--red); }
+.toggle.on-red .toggle-knob { background: white; left: 16px; }
+.toggle.on-navy { background: var(--navy); border-color: var(--navy); }
+.toggle.on-navy .toggle-knob { background: white; left: 16px; }
+.toggle.on-purple { background: var(--purple); border-color: var(--purple); }
+.toggle.on-purple .toggle-knob { background: white; left: 16px; }
+.toggle.on-renter { background: var(--renter); border-color: var(--renter); }
+.toggle.on-renter .toggle-knob { background: white; left: 16px; }
+.layer-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.layer-hatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; background: repeating-linear-gradient(45deg, var(--purple), var(--purple) 1.5px, transparent 1.5px, transparent 5px); border: 1px solid var(--purple); }
+.layer-name { font-size: 12px; color: var(--text); }
+.layer-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+.layer-note { font-size: 10px; color: var(--text3); margin-top: 6px; line-height: 1.4; }
+
+.slider-wrap { margin-bottom: 12px; }
+.slider-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.slider-name { font-size: 11px; color: var(--text2); }
+.slider-val { font-size: 11px; font-weight: 700; color: var(--navy); font-family: var(--mono); }
+input[type=range] {
+  width: 100%; height: 4px; border-radius: 2px;
+  appearance: none; -webkit-appearance: none; background: var(--slate2);
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--blue); border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer;
+}
+input[type=range]:focus { outline: none; }
+.slider-bounds { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); margin-top: 3px; }
+
+/* ── Right sidebar ── */
+.sidebar-right {
+  background: var(--white); border-left: 1px solid var(--border);
+  overflow-y: auto; padding: 0; display: flex; flex-direction: column;
+  grid-column: 2; grid-row: 1;
+}
+.spot-card { background: var(--slate); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; }
+.spot-row { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.spot-row:last-child { border-bottom: none; }
+.spot-key { font-size: 11px; color: var(--text2); }
+.spot-val { font-size: 12px; font-weight: 700; font-family: var(--mono); }
+.spot-name { font-size: 13.5px; font-weight: 700; color: var(--navy); }
+.spot-sub { font-size: 11px; color: var(--text2); margin-top: 1px; margin-bottom: 10px; }
+
+.risk-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 20px; margin-top: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.risk-high { background: var(--red-pale); color: var(--red); }
+.risk-med { background: var(--amber-pale); color: var(--amber); }
+.risk-watch { background: var(--teal-pale); color: var(--teal); }
+.risk-low { background: var(--green-pale); color: var(--green); }
+
+.bar-track { background: var(--slate2); border-radius: 3px; height: 5px; overflow: hidden; margin: 3px 0 7px; }
+.bar-fill { height: 5px; border-radius: 3px; transition: width .4s ease; }
+
+.legend-ramp { height: 9px; border-radius: 4px; margin: 5px 0; }
+.legend-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--text3); }
+.legend-items { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.legend-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text2); }
+.legend-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-outline-sym { width: 14px; height: 10px; border-radius: 2px; border: 2px dashed var(--red); flex-shrink: 0; }
+.legend-hatch-sym { width: 14px; height: 10px; border-radius: 2px; flex-shrink: 0; background: repeating-linear-gradient(45deg, var(--purple), var(--purple) 1.5px, transparent 1.5px, transparent 5px); border: 1px solid var(--purple); }
+
+.bg-list { display: flex; flex-direction: column; gap: 4px; }
+.bg-item { display: flex; align-items: center; justify-content: space-between; background: var(--slate); border-radius: var(--radius); padding: 7px 10px; cursor: pointer; font-size: 11px; border: 1.5px solid transparent; transition: border-color .15s, background .15s; }
+.bg-item:hover { background: var(--slate2); border-color: var(--blue); }
+.bg-item.selected { border-color: var(--blue); background: var(--blue-pale); }
+.bg-rank { font-size: 10px; font-weight: 700; color: var(--text3); font-family: var(--mono); width: 16px; flex-shrink: 0; }
+.bg-code { font-weight: 600; color: var(--navy); flex: 1; padding-left: 4px; min-width: 0; }
+.bg-code .bg-sub { display: block; font-size: 10px; font-weight: 400; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bg-score { font-family: var(--mono); font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.score-red { color: var(--red); } .score-amber { color: var(--amber); } .score-teal { color: var(--teal); } .score-green { color: var(--green); }
+
+/* Spotlight extra sections */
+.sp-section-title {
+  font-size: 10px; font-weight: 700; color: var(--navy); text-transform: uppercase;
+  letter-spacing: .05em; margin: 12px 0 8px; display: flex; align-items: center; gap: 5px;
+}
+.sp-crs-card { background: var(--purple-pale); border: 1px solid #E0D3F0; border-radius: var(--radius); padding: 9px 10px; }
+.sp-crs-row { font-size: 11px; color: var(--text); display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.sp-crs-name { font-weight: 600; }
+.sp-crs-count { font-family: var(--mono); font-weight: 700; color: var(--purple); flex-shrink: 0; }
+.sp-crs-empty { font-size: 11px; color: var(--text3); font-style: italic; }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text3); font-size: 12px; gap: 8px; padding: 20px 10px; text-align: center; }
+.empty-state .es-icon { font-size: 28px; opacity: .5; }
+
+/* ── Table view ── */
+#view-table { display: none; grid-column: 1 / 3; grid-row: 1; overflow: auto; background: var(--slate); flex-direction: column; }
+#view-table.active { display: flex; }
+
+.table-header-bar {
+  background: var(--white); padding: 14px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 5;
+  flex-shrink: 0;
+}
+.table-title { font-size: 14px; font-weight: 700; color: var(--navy); }
+.table-subtitle { font-size: 11px; color: var(--text2); margin-top: 1px; }
+.table-wrap { padding: 16px; }
+table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--white); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); }
+table.data-table thead tr { background: var(--navy); }
+table.data-table th { padding: 10px 13px; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); text-align: left; user-select: none; cursor: pointer; white-space: nowrap; transition: background .15s; letter-spacing: .03em; }
+table.data-table th:hover { background: #16324F; color: white; }
+table.data-table th.sort-asc::after { content: ' ↑'; color: var(--blue-light); font-size: 10px; }
+table.data-table th.sort-desc::after { content: ' ↓'; color: var(--blue-light); font-size: 10px; }
+table.data-table td { padding: 9px 13px; border-bottom: 1px solid var(--border); }
+table.data-table tr:last-child td { border-bottom: none; }
+table.data-table tr:hover td { background: var(--slate); }
+table.data-table tr.high-risk td { background: rgba(192,57,43,0.04); }
+table.data-table tr.med-risk td { background: rgba(224,123,42,0.04); }
+.tbl-badge { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; font-family: var(--mono); }
+.tbl-high { background: var(--red-pale); color: var(--red); }
+.tbl-med { background: var(--amber-pale); color: var(--amber); }
+.tbl-watch { background: var(--teal-pale); color: var(--teal); }
+.tbl-lower { background: var(--green-pale); color: var(--green); }
+.mono { font-family: var(--mono); }
+.flag { color: var(--red); font-weight: 700; }
+.flag-amber { color: var(--amber); font-weight: 700; }
+
+/* ── Definitions view ── */
+#view-chart { display: none; grid-column: 1 / 3; grid-row: 1; overflow: auto; background: var(--slate); }
+#view-chart.active { display: flex; flex-direction: column; }
+
+/* Leaflet attribution positioning */
+.leaflet-control-attribution { font-size: 9px !important; }
+
+/* ════════════════════════════════════════════════════════════
+   POLISH LAYER — refined depth, spacing, typography & motion.
+   Same palette (navy / blue / teal / amber / red / purple / renter-pink).
+════════════════════════════════════════════════════════════ */
+:root {
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow: 0 1px 2px rgba(14,42,71,.06), 0 1px 3px rgba(14,42,71,.08);
+  --shadow-md: 0 6px 16px rgba(14,42,71,.10), 0 1px 3px rgba(14,42,71,.06);
+  --shadow-lg: 0 20px 44px rgba(14,42,71,.18), 0 4px 12px rgba(14,42,71,.08);
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --ring: 0 0 0 3px rgba(27,95,168,.22);
+}
+::selection { background: rgba(27,95,168,.22); }
+body { background: #EDF0F5; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; font-feature-settings: "cv11","ss01"; }
+:focus-visible { outline: none; box-shadow: var(--ring); }
+
+* { scrollbar-width: thin; scrollbar-color: rgba(14,42,71,.25) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: rgba(14,42,71,.20); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(14,42,71,.36); background-clip: padding-box; border: 3px solid transparent; }
+
+/* ── Header ── */
+.header {
+  position: relative; z-index: 20; height: 62px; padding: 0 22px;
+  background:
+    radial-gradient(900px 140px at 12% -40%, rgba(74,143,214,.35), transparent 70%),
+    linear-gradient(120deg, #0A2038 0%, var(--navy) 48%, #15385C 100%);
+  box-shadow: 0 2px 14px rgba(8,24,44,.35);
+}
+.header::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--blue-light) 30%, var(--teal-light) 70%, transparent 100%);
+  opacity: .75;
+}
+.header-brand img { box-shadow: 0 2px 10px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.12); background: rgba(255,255,255,.06); }
+.header-title { font-size: 16px; letter-spacing: -0.02em; }
+.header-sub { font-size: 11px; color: rgba(255,255,255,.58); letter-spacing: .015em; }
+.view-tabs { padding: 3px; gap: 2px; border-radius: 12px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(4px); }
+.view-tab { padding: 7px 17px; border-radius: 9px; font-weight: 600; transition: background .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease); }
+.view-tab.active { background: linear-gradient(180deg, #2A74C2, var(--blue)); box-shadow: 0 3px 10px rgba(27,95,168,.55), inset 0 1px 0 rgba(255,255,255,.22); }
+
+/* ── Metrics ── */
+.metrics { background: linear-gradient(180deg, #17344F 0%, #122B43 100%); border-bottom: 1px solid rgba(255,255,255,.08); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.metric { position: relative; padding: 12px 22px 12px 24px; transition: background .2s var(--ease); }
+.metric:hover { background: rgba(255,255,255,.04); }
+.metric::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; background: var(--m-accent, var(--blue-light)); box-shadow: 0 0 12px var(--m-accent, var(--blue-light)); opacity: .9; }
+.metric:nth-child(1) { --m-accent: #F07066; }
+.metric:nth-child(2) { --m-accent: var(--blue-light); }
+.metric:nth-child(3) { --m-accent: var(--teal-light); }
+.metric:nth-child(4) { --m-accent: #B79AE6; }
+.metric-label { font-size: 10px; font-weight: 600; letter-spacing: .1em; color: rgba(255,255,255,.52); }
+.metric-value { font-size: 24px; letter-spacing: -0.02em; margin-top: 3px; }
+.metric-value.metric-value-sm { font-size: 15.5px; margin-top: 5px; }
+.metric-sub { font-size: 10.5px; color: rgba(255,255,255,.42); margin-top: 2px; }
+
+/* ── Sidebars ── */
+.sidebar, .sidebar-right { background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFD 100%); }
+.sidebar-section { padding: 18px 18px 16px; }
+.sec-label { display: flex; align-items: center; gap: 10px; font-size: 10px; font-weight: 700; letter-spacing: .11em; color: #6B7686; margin-bottom: 12px; }
+.sec-label::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--border2), transparent); }
+
+select.community-sel { padding: 11px 32px 11px 13px; font-weight: 600; border-radius: var(--radius); box-shadow: var(--shadow); transition: border-color .18s var(--ease), box-shadow .18s var(--ease); }
+select.community-sel:hover { border-color: var(--blue-light); }
+select.community-sel:focus { border-color: var(--blue); box-shadow: var(--ring); }
+.community-info { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius); border-left: 3px solid var(--blue); background: linear-gradient(135deg, var(--blue-pale), #F4F8FD); box-shadow: 0 1px 2px rgba(27,95,168,.08); }
+.community-info-name { font-size: 12px; font-weight: 700; }
+
+.radio-group { gap: 8px; }
+.radio-row { padding: 10px 11px; border: 1.5px solid var(--border); border-radius: var(--radius); background: #fff; transition: border-color .18s var(--ease), background .18s var(--ease), box-shadow .18s var(--ease); }
+.radio-row:hover { border-color: var(--blue-light); }
+.radio-row:has(input:checked) { border-color: var(--blue); background: linear-gradient(135deg, var(--blue-pale), #F6FAFE); box-shadow: 0 1px 3px rgba(27,95,168,.14); }
+.radio-row .radio-note { margin-top: 2px; }
+
+.layer-row { padding: 6px 8px; margin: 0 -8px; border-radius: var(--radius-sm); transition: background .15s var(--ease); }
+.layer-row:hover { background: var(--slate); }
+.layer-name { font-size: 12.5px; }
+.layer-divider { margin: 6px 0; border-top-color: rgba(14,42,71,.07); }
+.toggle { width: 34px; height: 20px; border-radius: 10px; transition: background .22s var(--ease), border-color .22s var(--ease), box-shadow .22s var(--ease); }
+.toggle-knob { width: 14px; height: 14px; top: 2px; left: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.28); transition: left .22s var(--ease), background .22s var(--ease); }
+.toggle[class*="on-"] { box-shadow: 0 0 0 3px rgba(14,42,71,.06); }
+.toggle[class*="on-"] .toggle-knob { left: 15px; }
+.layer-hatch { width: 13px; height: 13px; }
+
+.slider-wrap { margin-bottom: 15px; }
+.slider-name { font-size: 11.5px; }
+.slider-val { padding: 2px 7px; border-radius: 6px; background: var(--blue-pale); color: var(--blue); font-size: 11px; }
+input[type=range] { height: 5px; border-radius: 3px; background: linear-gradient(to right, var(--blue) var(--fill, 0%), var(--slate2) var(--fill, 0%)); }
+input[type=range]::-webkit-slider-thumb { width: 16px; height: 16px; border: 3px solid #fff; background: var(--blue); box-shadow: 0 2px 6px rgba(27,95,168,.5); transition: transform .15s var(--ease), box-shadow .15s var(--ease); }
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); box-shadow: 0 2px 10px rgba(27,95,168,.65); }
+input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: 3px solid #fff; background: var(--blue); box-shadow: 0 2px 6px rgba(27,95,168,.5); }
+.layer-note { font-size: 10.5px; line-height: 1.5; padding: 8px 10px; background: var(--slate); border-radius: var(--radius-sm); margin-top: 8px; }
+
+/* ── Spotlight / lists ── */
+.spot-name { font-size: 15px; letter-spacing: -0.015em; }
+.spot-card { background: linear-gradient(180deg, #F8FAFC, #F1F4F8); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; box-shadow: var(--shadow); }
+.spot-row { padding: 6px 0; border-bottom-color: rgba(14,42,71,.07); }
+.spot-key { font-size: 11.5px; }
+.bar-track { height: 6px; border-radius: 4px; background: #DDE3EA; margin: 3px 0 8px; }
+.bar-fill { height: 6px; border-radius: 4px; }
+.risk-badge { padding: 6px 12px; box-shadow: var(--shadow); border: 1px solid rgba(14,42,71,.06); }
+.sp-crs-card { border-radius: var(--radius); box-shadow: var(--shadow); }
+.legend-ramp { height: 10px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(14,42,71,.08); }
+.legend-swatch { box-shadow: 0 0 0 2px rgba(255,255,255,.9), 0 0 0 3px rgba(14,42,71,.12); }
+
+.bg-list { gap: 6px; }
+.bg-item { padding: 9px 12px; border-radius: var(--radius); background: #F5F7FA; transition: border-color .18s var(--ease), background .18s var(--ease), transform .18s var(--ease), box-shadow .18s var(--ease); }
+.bg-item:hover { background: #fff; border-color: var(--blue-light); transform: translateX(2px); box-shadow: var(--shadow); }
+.bg-item.selected { border-color: var(--blue); background: linear-gradient(135deg, var(--blue-pale), #F6FAFE); box-shadow: var(--shadow); }
+.bg-score { padding: 2px 8px; border-radius: 10px; background: rgba(14,42,71,.05); font-size: 10.5px; }
+
+.empty-state { padding: 26px 12px; color: var(--text3); }
+.empty-state .es-icon { font-size: 30px; opacity: .55; filter: grayscale(.2); }
+
+/* ── Map chrome ── */
+.map-wrap { background: #D9E4EE; }
+.choro-legend { background: rgba(255,255,255,.93); backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2); border: 1px solid rgba(255,255,255,.7); border-radius: var(--radius-lg); padding: 12px 14px; box-shadow: var(--shadow-lg); }
+.legend-title { font-size: 11.5px; letter-spacing: -0.01em; }
+.legend-grad { height: 9px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(14,42,71,.08); }
+.leaflet-bar { border: none !important; box-shadow: var(--shadow-md) !important; border-radius: 12px !important; overflow: hidden; }
+.leaflet-bar a { width: 32px !important; height: 32px !important; line-height: 32px !important; color: var(--navy) !important; border-bottom: 1px solid var(--border) !important; transition: background .15s var(--ease); }
+.leaflet-bar a:hover { background: var(--blue-pale) !important; color: var(--blue) !important; }
+.leaflet-control-attribution { background: rgba(255,255,255,.75) !important; backdrop-filter: blur(4px); border-radius: 8px 0 0 0; }
+.no-community-msg, .map-loading { backdrop-filter: blur(3px); background: rgba(214,226,238,.82); }
+.no-community-msg h3 { font-size: 17px; letter-spacing: -0.015em; }
+.spinner { border-width: 3px; box-shadow: 0 2px 8px rgba(27,95,168,.18); }
+
+/* ── Tooltip shell (inner panels' layout is unchanged) ── */
+.map-tooltip { border: 1px solid rgba(14,42,71,.10); border-radius: 16px; box-shadow: var(--shadow-lg); animation: ttIn .16s var(--ease); }
+@keyframes ttIn { from { opacity: 0; transform: translateY(5px) scale(.985); } to { opacity: 1; transform: none; } }
+.tt-header { padding: 11px 16px; background: linear-gradient(120deg, #0A2038 0%, var(--navy) 55%, #15385C 100%); }
+.tt-left { background: linear-gradient(180deg, #FBFCFD, #F3F6F9); }
+.tt-hbar-track { height: 8px; background: #E8ECF1; }
+.tt-extra { background: linear-gradient(180deg, #F5F0FB, var(--purple-pale)); }
+.tt-stat-val { letter-spacing: -0.01em; }
+
+/* ── Table & Definitions ── */
+#view-table, #view-chart { background: #EDF0F5; }
+.table-header-bar { padding: 16px 24px; background: rgba(255,255,255,.985); border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 rgba(14,42,71,.03), 0 4px 12px rgba(14,42,71,.04); }
+.table-title { font-size: 15.5px; letter-spacing: -0.02em; }
+.table-subtitle { font-size: 11.5px; margin-top: 2px; }
+.table-wrap { padding: 20px 24px 28px; }
+table.data-table { border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-md); }
+table.data-table thead tr { background: linear-gradient(120deg, #0A2038, var(--navy) 55%, #15385C); }
+table.data-table th { padding: 13px 14px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; color: rgba(255,255,255,.82); }
+table.data-table th:hover { background: rgba(255,255,255,.09); }
+table.data-table td { padding: 11px 14px; vertical-align: top; transition: background .12s var(--ease); }
+table.data-table tbody tr:nth-child(even) td { background: rgba(14,42,71,.018); }
+table.data-table tr:hover td { background: var(--blue-pale) !important; }
+table.data-table tr.high-risk td { background: rgba(192,57,43,.05); }
+table.data-table tr.med-risk td { background: rgba(224,123,42,.05); }
+.tbl-badge { padding: 3px 10px; border-radius: 12px; font-size: 10.5px; letter-spacing: .02em; border: 1px solid rgba(14,42,71,.05); }
+
+.export-btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; background: linear-gradient(180deg, #fff, #F4F7FA); border: 1.5px solid var(--border2); border-radius: var(--radius); color: var(--navy); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: var(--shadow); transition: all .18s var(--ease); }
+.export-btn:hover { background: linear-gradient(180deg, #1D6BB8, var(--blue)); border-color: var(--blue); color: #fff; box-shadow: 0 6px 16px rgba(27,95,168,.38); transform: translateY(-1px); }
+.export-btn:active { transform: translateY(0); box-shadow: var(--shadow); }
+
+.sources-card { margin-top: 20px; padding: 20px 24px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); position: relative; overflow: hidden; }
+.sources-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, var(--blue-light), var(--teal-light)); }
+.sources-card-title { font-size: 11px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--navy); margin-bottom: 12px; }
+.sources-bullets { margin: 0 0 0 18px; padding: 0; font-size: 12.5px; line-height: 1.6; color: var(--text); }
+.sources-bullets li { margin-bottom: 8px; padding-left: 4px; }
+.sources-bullets li::marker { color: var(--blue-light); }
+.sources-bullets a { color: var(--blue); text-decoration: none; border-bottom: 1px solid rgba(27,95,168,.28); transition: border-color .15s var(--ease), color .15s var(--ease); }
+.sources-bullets a:hover { color: var(--navy); border-bottom-color: var(--navy); }
+.sources-bullets a strong { font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.community-fixed { margin-top: 0 !important; }
+.community-fixed .community-info-name { font-size: 14px !important; letter-spacing: -0.015em; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-brand">
+      <img src="./I4G.png" alt="Company logo" style="width:36px; height:36px; border-radius:10px; object-fit:contain;">
+      <div>
+        <div class="header-title">San Mateo County · Flood Risk Community Explorer</div>
+        <div class="header-sub">SFHA exposure · NFIP take-up by census block group</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="view-tabs">
+        <button class="view-tab active" id="btn-map">Map</button>
+        <button class="view-tab" id="btn-table">Table</button>
+        <button class="view-tab" id="btn-chart">Definitions</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label">High-risk block groups</div>
+      <div class="metric-value mv-red" id="m-high">—</div>
+      <div class="metric-sub">All 3 thresholds flagged</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Avg % Structures in SFHA</div>
+      <div class="metric-value mv-blue" id="m-rate">—</div>
+      <div class="metric-sub">Selected community</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Population in high-risk BGs</div>
+      <div class="metric-value mv-teal" id="m-pop">—</div>
+      <div class="metric-sub">High-risk block groups</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Community Rating System</div>
+      <div class="metric-value mv-white metric-value-sm" id="m-crs">—</div>
+      <div class="metric-sub" id="m-crs-sub">San Mateo County</div>
+    </div>
+  </div>
+
+  <!-- BODY: Left sidebar always present; right area switches views -->
+  <div class="body" id="main-body">
+
+    <!-- LEFT SIDEBAR (always visible) -->
+    <aside class="sidebar" aria-label="Community and filters">
+
+      <div class="sidebar-section">
+        <div class="sec-label">Community</div>
+        <div class="community-info community-fixed" id="community-info">
+          <div class="community-info-name" id="ci-name">San Mateo County</div>
+          <div class="community-info-detail" id="ci-detail">Peninsula · 764K population</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sec-label">Choropleth metric</div>
+        <div class="radio-group">
+          <label class="radio-row">
+            <input type="radio" name="choro-metric" value="pctSFHA" checked>
+            <span>% Residential Structures in SFHA<span class="radio-note">Share of residential structures inside the Special Flood Hazard Area</span></span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="choro-metric" value="nfipSFHA">
+            <span>NFIP Take-up Rate (in SFHA) as of June 2026<span class="radio-note">Share of SFHA residential structures with an NFIP policy</span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sec-label">Overlay layers</div>
+        <div class="layer-row" onclick="toggleLayer('income')">
+          <div class="toggle on-teal" id="tog-income"><div class="toggle-knob"></div></div>
+          <div class="layer-dot" style="background:var(--teal)"></div>
+          <span class="layer-name">LMI overlay</span>
+        </div>
+        <div class="layer-row" onclick="toggleLayer('renter')">
+          <div class="toggle on-renter" id="tog-renter"><div class="toggle-knob"></div></div>
+          <div class="layer-dot" style="background:var(--renter)"></div>
+          <span class="layer-name">Renter overlay</span>
+        </div>
+        <div class="layer-row" onclick="toggleLayer('lowtakeup')">
+          <div class="toggle on-amber" id="tog-lowtakeup"><div class="toggle-knob"></div></div>
+          <div class="layer-dot" style="background:var(--amber)"></div>
+          <span class="layer-name">Low NFIP take-up overlay</span>
+        </div>
+        <hr class="layer-divider">
+        <div class="layer-row" onclick="toggleLayer('outline')">
+          <div class="toggle on-red" id="tog-outline"><div class="toggle-knob"></div></div>
+          <div class="layer-dot" style="border:2px dashed var(--red);background:transparent;border-radius:2px;width:9px;height:9px;"></div>
+          <span class="layer-name">High-risk border</span>
+        </div>
+        <div class="layer-row" onclick="toggleLayer('labels')">
+          <div class="toggle" id="tog-labels"><div class="toggle-knob"></div></div>
+          <div class="layer-dot" style="background:var(--navy)"></div>
+          <span class="layer-name">Block group labels</span>
+        </div>
+        <hr class="layer-divider">
+        <div class="layer-row" onclick="toggleLayer('crs')">
+          <div class="toggle" id="tog-crs"><div class="toggle-knob"></div></div>
+          <div class="layer-hatch"></div>
+          <span class="layer-name">CRS Communities</span>
+        </div>
+        <div class="layer-note" id="crs-note">Cross-hatched areas participate in FEMA's Community Rating System.</div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sec-label">Risk thresholds</div>
+        <div class="slider-wrap">
+          <div class="slider-meta">
+            <span class="slider-name">% Structures in SFHA ≥</span>
+            <span class="slider-val" id="sv-pctsfha">50%</span>
+          </div>
+          <input type="range" id="sl-pctsfha" min="0" max="100" step="1" value="50">
+          <div class="slider-bounds"><span>0%</span><span>100%</span></div>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-meta">
+            <span class="slider-name">LMI population ≥</span>
+            <span class="slider-val" id="sv-lmi">40%</span>
+          </div>
+          <input type="range" id="sl-lmi" min="0" max="100" step="1" value="40">
+          <div class="slider-bounds"><span>0%</span><span>100%</span></div>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-meta">
+            <span class="slider-name">Renter share ≥</span>
+            <span class="slider-val" id="sv-renter">50%</span>
+          </div>
+          <input type="range" id="sl-renter" min="0" max="100" step="1" value="50">
+          <div class="slider-bounds"><span>0%</span><span>100%</span></div>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-meta">
+            <span class="slider-name">NFIP take-up (in SFHA) ≤</span>
+            <span class="slider-val" id="sv-nfip">40%</span>
+          </div>
+          <input type="range" id="sl-nfip" min="0" max="100" step="1" value="40">
+          <div class="slider-bounds"><span>0%</span><span>100%</span></div>
+        </div>
+        <div class="layer-note">A block group is <strong>high-risk</strong> when all 4 thresholds above are exceeded. Priority order when 3 of 4 are exceeded: % in SFHA &gt; LMI &gt; Renter % &gt; NFIP take-up.</div>
+      </div>
+
+    </aside>
+
+    <!-- VIEW AREA (right of sidebar) -->
+    <div class="view-area" id="view-area">
+
+      <!-- MAP VIEW (persistent, never destroyed) -->
+      <div id="view-map">
+        <!-- Map fills the left column of view-area -->
+        <div class="map-wrap" id="map-container">
+          <!-- Leaflet base map (overlay drawn natively inside Leaflet SVG pane) -->
+          <div id="leaflet-map"></div>
+          <!-- Address search -->
+          <div class="addr-search" id="addr-search">
+            <form id="addr-form" autocomplete="off">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              <input id="addr-input" type="text" placeholder="Search an address in San Mateo County…" aria-label="Search address">
+              <button type="button" class="as-clear" id="addr-clear" title="Clear" aria-label="Clear search">&times;</button>
+              <button type="submit" class="as-go">Search</button>
+            </form>
+            <div class="as-list" id="addr-list"></div>
+          </div>
+          <!-- States -->
+          <div class="no-community-msg" id="no-community">
+            <div class="big-icon">🏘</div>
+            <h3>Loading San Mateo County…</h3>
+            <p>Preparing the San Mateo County block group map and flood risk analysis.</p>
+          </div>
+          <div class="map-loading" id="map-loading">
+            <div class="spinner"></div>
+            <span>Loading block group geography…</span>
+          </div>
+          <!-- Legend -->
+          <div class="choro-legend" id="choro-legend" style="display:none;">
+            <div class="legend-title" id="legend-title">% Structures in SFHA</div>
+            <div class="legend-grad" id="legend-grad"></div>
+            <div class="legend-ends-row"><span>Low</span><span>High</span></div>
+            <div class="legend-nodata-row" id="legend-nodata-row" style="display:none;">
+              <div class="legend-nodata-swatch"></div><span>No structures in SFHA</span>
+            </div>
+          </div>
+          <!-- Tooltip -->
+          <div class="map-tooltip" id="tooltip">
+  <div class="tt-header">
+    <div id="tt-name"></div>
+    <div class="tt-header-sub" id="tt-community"></div>
+  </div>
+  <div class="tt-body">
+
+    <!-- LEFT PANEL: donut chart -->
+    <div class="tt-left">
+      <div class="tt-pie-label">Residential structures<br>inside vs. outside SFHA</div>
+      <svg id="tt-pie" width="120" height="120" viewBox="0 0 120 120"></svg>
+      <div class="tt-pie-legend">
+        <div class="tt-pie-legend-row"><div class="tt-pie-dot" style="background:var(--blue)"></div>In SFHA<span class="tt-pie-legend-val" id="tt-pie-in"></span></div>
+        <div class="tt-pie-legend-row"><div class="tt-pie-dot" style="background:var(--teal-light)"></div>Outside SFHA<span class="tt-pie-legend-val" id="tt-pie-out"></span></div>
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="tt-panel-divider"></div>
+
+    <!-- RIGHT PANEL: horizontal bars + stats -->
+    <div class="tt-right">
+      <div class="tt-bar-section-label">NFIP Take-up (as of June 2026)</div>
+
+      <div class="tt-hbar-row">
+        <div class="tt-hbar-meta"><span>NFIP take-up · overall</span><span class="tt-hbar-val" id="tt-nfip-all"></span></div>
+        <div class="tt-hbar-track"><div class="tt-hbar-fill" id="tt-bar-nfip-all" style="background:var(--blue);"></div></div>
+      </div>
+      <div class="tt-hbar-row">
+        <div class="tt-hbar-meta"><span>NFIP take-up · in SFHA</span><span class="tt-hbar-val" id="tt-nfip-sfha"></span></div>
+        <div class="tt-hbar-track"><div class="tt-hbar-fill" id="tt-bar-nfip-sfha" style="background:var(--navy);"></div></div>
+      </div>
+      <div class="tt-hbar-row">
+        <div class="tt-hbar-meta"><span>NFIP take-up · outside SFHA</span><span class="tt-hbar-val" id="tt-nfip-nonsfha"></span></div>
+        <div class="tt-hbar-track"><div class="tt-hbar-fill" id="tt-bar-nfip-nonsfha" style="background:var(--teal);"></div></div>
+      </div>
+      <div class="tt-hbar-row">
+        <div class="tt-hbar-meta"><span>NFIP take-up · renters</span><span class="tt-hbar-val" id="tt-nfip-renter"></span></div>
+        <div class="tt-hbar-track"><div class="tt-hbar-fill" id="tt-bar-nfip-renter" style="background:var(--renter);"></div></div>
+      </div>
+      <div class="tt-stat-grid tt-stat-grid-3">
+        <div class="tt-stat"><div class="tt-stat-key">Population</div><div class="tt-stat-val" id="tt-pop"></div></div>
+        <div class="tt-stat"><div class="tt-stat-key">LMI %</div><div class="tt-stat-val" id="tt-lmi"></div></div>
+        <div class="tt-stat"><div class="tt-stat-key">Renter %</div><div class="tt-stat-val" id="tt-renter"></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- EXTRA: CRS -->
+  <div class="tt-extra">
+    <div class="tt-extra-title">🛡 Community Rating System</div>
+    <div id="tt-crs"></div>
+  </div>
+</div>
+        </div>
+
+        <!-- Right sidebar (part of map view) -->
+        <aside class="sidebar-right" aria-label="Block group details and legend">
+          <div class="sidebar-section">
+            <div class="sec-label">Block Group Spotlight</div>
+            <div id="spotlight-empty" class="empty-state">
+              <div class="es-icon">📍</div>
+              <span>Click a block group on the map</span>
+            </div>
+            <div id="spotlight-content" style="display:none;">
+              <div class="spot-name" id="sp-name"></div>
+              <div class="spot-sub" id="sp-sub"></div>
+              <div class="spot-card">
+                <div class="spot-row"><span class="spot-key">% Structures in SFHA</span><span class="spot-val" id="sp-pctsfha" style="color:var(--blue);"></span></div>
+                <div class="bar-track"><div class="bar-fill" id="bar-pctsfha" style="background:var(--blue);"></div></div>
+                <div class="spot-row"><span class="spot-key">NFIP take-up (in SFHA)</span><span class="spot-val" id="sp-nfipsfha"></span></div>
+                <div class="bar-track"><div class="bar-fill" id="bar-nfipsfha" style="background:var(--navy);"></div></div>
+                <div class="spot-row"><span class="spot-key">NFIP take-up (outside SFHA)</span><span class="spot-val" id="sp-nfipnonsfha"></span></div>
+                <div class="bar-track"><div class="bar-fill" id="bar-nfipnonsfha" style="background:var(--teal);"></div></div>
+                <div class="spot-row"><span class="spot-key">NFIP take-up (renters)</span><span class="spot-val" id="sp-nfiprenter"></span></div>
+                <div class="bar-track"><div class="bar-fill" id="bar-nfiprenter" style="background:var(--renter);"></div></div>
+                <div class="spot-row"><span class="spot-key">LMI population</span><span class="spot-val" id="sp-lmi"></span></div>
+                <div class="bar-track"><div class="bar-fill" id="bar-lmi" style="background:var(--amber);"></div></div>
+                <div class="spot-row"><span class="spot-key">Renter %</span><span class="spot-val" id="sp-renter"></span></div>
+                <div class="bar-track"><div class="bar-fill" id="bar-renter" style="background:var(--renter);"></div></div>
+                <div class="spot-row"><span class="spot-key">Residential structures</span><span class="spot-val" id="sp-structures"></span></div>
+                <div class="spot-row"><span class="spot-key">Structures in SFHA</span><span class="spot-val" id="sp-structures-sfha"></span></div>
+                <div class="spot-row"><span class="spot-key">Population</span><span class="spot-val" id="sp-pop"></span></div>
+              </div>
+              <div id="sp-badge"></div>
+
+              <div class="sp-section-title">🛡 Community Rating System</div>
+              <div class="sp-crs-card" id="sp-crs"></div>
+            </div>
+          </div>
+          <div class="sidebar-section">
+            <div class="sec-label">Map Legend</div>
+            <div style="font-size:11px;color:var(--text2);margin-bottom:3px;" id="sidebar-legend-label">% Structures in SFHA</div>
+            <div class="legend-ramp" id="sidebar-legend-ramp"></div>
+            <div class="legend-ends"><span>Low</span><span>High</span></div>
+            <div class="legend-items">
+              <div class="legend-item" id="leg-income"><div class="legend-swatch" style="background:var(--teal)"></div>LMI population overlay dot</div>
+              <div class="legend-item" id="leg-renter"><div class="legend-swatch" style="background:var(--renter)"></div>Renter share overlay dot</div>
+              <div class="legend-item" id="leg-lowtakeup"><div class="legend-swatch" style="background:var(--amber)"></div>Low NFIP take-up dot</div>
+              <div class="legend-item" id="leg-outline"><div class="legend-outline-sym"></div>High-risk block group border</div>
+              <div class="legend-item" id="leg-crs"><div class="legend-hatch-sym"></div>Community Rating System area</div>
+            </div>
+          </div>
+          <div class="sidebar-section" style="flex:1;">
+            <div class="sec-label">Top At-Risk Block Groups</div>
+            <div class="bg-list" id="top-bgs">
+              <div class="empty-state">
+                <div class="es-icon">📊</div>
+                <span>Loading San Mateo County rankings…</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div><!-- #view-map -->
+
+      <!-- TABLE VIEW (hidden until activated) -->
+      <div id="view-table"></div>
+
+      <!-- CHART VIEW (hidden until activated) -->
+      <div id="view-chart"></div>
+
+    </div><!-- #view-area -->
+  </div><!-- .body -->
+
+</div><!-- .app -->
+
+<!-- Libraries -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+
+<script>
+/* ════════════════════════════════════════════
+   COMMUNITY DEFINITIONS
+   NOTE: `label` must match the "Community" property
+   exactly as it appears in SanMateo_bg_tool.json.
+════════════════════════════════════════════ */
+const COMMUNITY_META = {
+  sanmateo: { label:'San Mateo County', fips:'06081', detail:'Peninsula · Block group analysis', center:[37.43,-122.33], zoom:10 },
+};
+const COMMUNITY_KEY = 'sanmateo';
+// San Mateo-only data files (SanMateo_bg_tool.json, CRS_SanMateo.json, SanMateo_CRS.csv) contain just this county,
+// so no per-community filtering is needed.
+
+const VARIABLE_DEFINITIONS = [
+  { variable: '% Structures in SFHA', definition: 'Percent of residential structures located inside the Special Flood Hazard Area (the FEMA-mapped 1%-annual-chance floodplain)', source: 'FEMA National Flood Hazard Layer (NFHL); residential structure counts from the National Structure Inventory (NSI).' },
+  { variable: 'NFIP Take-up · Overall', definition: 'Percent of all residential structures in the block group with an active NFIP flood insurance policy', source: 'FEMA National Flood Insurance Program (NFIP) policy data; NSI structure counts.' },
+  { variable: 'NFIP Take-up · in SFHA', definition: 'Percent of residential structures inside the SFHA with an active NFIP policy. Shown as N/A where a block group has zero residential structures in the SFHA.', source: 'FEMA NFIP policy data; NSI structure counts.' },
+  { variable: 'NFIP Take-up · outside SFHA', definition: 'Percent of residential structures outside the SFHA with an active NFIP policy', source: 'FEMA NFIP policy data; NSI structure counts.' },
+  { variable: 'NFIP Take-up · Renters', definition: 'NFIP take-up rate among renter-occupied housing units in the block group', source: 'FEMA National Flood Insurance Program (NFIP) policy data; renter-occupied housing unit data from US Census Bureau\'s 2020-2024 American Community Survey (ACS) 5-year data.' },
+  { variable: 'LMI %', definition: 'Percent of population earning ≤ 80% of the area median family income', source: 'US Census Bureau\'s 2020–2024 American Community Survey (ACS) 5-year data' },
+  { variable: 'Renter %', definition: 'Percent of housing units that are renter occupied', source: 'US Census Bureau\'s 2020-2024 American Community Survey (ACS) 5-year data' },
+  { variable: 'Residential Structures', definition: 'Total number of residential structures in the block group, and the split inside vs. outside the SFHA', source: 'National Structure Inventory (NSI)' },
+  { variable: 'Population', definition: 'Total population of the block group', source: 'US Census Bureau\'s 2020–2024 American Community Survey (ACS) 5-year data' },
+  { variable: 'Community Rating System (CRS)', definition: 'FEMA program that reduces NFIP premiums in communities that adopt floodplain management practices beyond federal minimum requirements. Shown as cross-hatched areas and as residential structure counts by participating CRS community.', source: 'FEMA Community Rating System (CRS) community list.' },
+  { variable: 'Risk Level', definition: '= High (all 4 risk thresholds exceeded);<br>= Medium (3 of 4 thresholds exceeded AND % Structures in SFHA is one of them);<br>= Watch (1–2 thresholds exceeded, or 3 exceeded that don\'t include % Structures in SFHA);<br>= Low (none exceeded).', source: 'Four risk thresholds, in priority order: % Structures in SFHA; LMI %; Renter %; NFIP take-up (in SFHA). Higher renter % indicates higher risk.' },
+];
+
+/* ════════════════════════════════════════════
+   CRS (Community Rating System) RESIDENTIAL STRUCTURE COUNTS
+   Loaded at runtime from ./SanMateo_CRS.csv (same folder as this file).
+   Update that CSV and this explorer reflects it on next load — no code changes.
+
+   Expected columns:
+     GEOID, Community, cis_community_name_full, residential_structure_crs
+   GEOID is the 12-digit block group GEOID (matches GEOID in SanMateo_bg_tool.json).
+   A block group can straddle more than one CRS community, so each GEOID maps to
+   a list of [CRS community name, residential structure count].
+════════════════════════════════════════════ */
+let CRS_LOOKUP = {};
+
+// Minimal CSV parser (quoted fields, commas or tabs, BOM-safe, \r\n or \n).
+function parseCSV(text) {
+  if (!text) return [];
+  text = text.replace(/^\uFEFF/, '');
+  const delim = text.indexOf('\t') !== -1 && text.indexOf(',') === -1 ? '\t' : ',';
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else if (c === '"') { inQuotes = true; }
+    else if (c === delim) { row.push(field); field = ''; }
+    else if (c === '\r') { /* skip */ }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  const clean = rows.filter(r => r.some(v => v !== ''));
+  if (!clean.length) return [];
+  const headers = clean[0].map(h => h.trim());
+  return clean.slice(1).map(r => {
+    const o = {};
+    headers.forEach((h, i) => { const v = r[i] !== undefined ? r[i].trim() : ''; o[h] = v; o[h.toLowerCase()] = v; });
+    return o;
+  });
+}
+
+function loadCrsCsv() {
+  return fetch('./SanMateo_CRS.csv', { cache: 'no-cache' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(text => {
+      const lookup = {};
+      parseCSV(text).forEach(row => {
+        let geoid = (row.geoid || '').replace(/\D/g, '');
+        if (!geoid) return;
+        geoid = geoid.padStart(12, '0');            // restore leading zero if a spreadsheet dropped it
+        const name  = (row.cis_community_name_full || '').replace(/\s+/g, ' ').trim();
+        const count = parseFloat(row.residential_structure_crs);
+        if (!name || !Number.isFinite(count)) return;
+        (lookup[geoid] = lookup[geoid] || []).push([name, count]);
+      });
+      CRS_LOOKUP = lookup;
+    })
+    .catch(err => { console.warn('SanMateo_CRS.csv not found or unreadable — CRS structure counts will be empty.', err); });
+}
+// Resolves once the CRS CSV has been fetched and parsed (or failed gracefully).
+const CRS_READY = loadCrsCsv();
+
+function crsInfo(geoid) {
+  const arr = CRS_LOOKUP[geoid];
+  if (!arr || !arr.length) return { total: 0, entries: [] };
+  const total = arr.reduce((s, x) => s + x[1], 0);
+  return { total, entries: arr.map(x => ({ name: x[0], count: x[1] })) };
+}
+
+/* ════════════════════════════════════════════
+   RENTER DATA — now read directly from SanMateo_bg_tool.json
+   (renter % and NFIP renter take-up are properties on each block group feature)
+════════════════════════════════════════════ */
+// Returns the first property whose name matches one of `names` (exact, then
+// case-insensitive), then falls back to any property matching `pattern`.
+function pickProp(props, names, pattern) {
+  if (!props) return null;
+  for (const n of names) if (props[n] !== undefined) return props[n];
+  const lower = {};
+  Object.keys(props).forEach(k => { lower[k.toLowerCase()] = k; });
+  for (const n of names) if (lower[n.toLowerCase()] !== undefined) return props[lower[n.toLowerCase()]];
+  if (pattern) {
+    const hit = Object.keys(props).find(k => pattern.test(k));
+    if (hit) return props[hit];
+  }
+  return null;
+}
+
+/* ════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════ */
+let layers = { income:true, renter:true, lowtakeup:true, outline:true, labels:false, crs:false };
+let thresholds = { pctSFHA:50, lmi:40, renter:50, nfip:40 };
+const hlMode = 4; // High-risk = all 4 thresholds exceeded (driven entirely by Risk Thresholds panel)
+let choroMetric = 'pctSFHA'; // 'pctSFHA' or 'nfipSFHA'
+let currentCommunity = '';
+let currentBgData = [];
+let selectedBg = null;
+let geoFeatures = null; // Array of GeoJSON features with _data attached
+let currentView = 'map';
+let sortCol = 'pctSFHA';
+let sortDir = -1;
+
+/* Leaflet map (initialized once) */
+let leafletMap = null;
+
+/* ════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════ */
+function numOrNull(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && (v.trim() === '' || v.trim().toUpperCase() === 'NA' || v.trim().toUpperCase() === 'N/A')) return null;
+  const n = +v;
+  return Number.isFinite(n) ? n : null;
+}
+
+// Normalize a raw SanMateo_bg_tool.json feature's properties into a clean data object
+function normalizeBg(props) {
+  const geoid = String(props.GEOID);
+  return {
+    geoid,
+    community:         props.Community,
+    population:        numOrNull(props.population) || 0,
+    structures:        numOrNull(props.residential_structure) || 0,
+    structuresSFHA:    numOrNull(props.residential_structure_SFHA) || 0,
+    structuresNonSFHA: numOrNull(props.residential_structure_nonSFHA) || 0,
+    pctSFHA:           numOrNull(props.Percent_residential_structure_SFHA) || 0,
+    nfipAll:           numOrNull(props.NFIP_takeup_residential),
+    nfipSFHA:          numOrNull(props.NFIP_takeup_residential_SFHA),     // null = NA (no structures in SFHA)
+    nfipNonSFHA:       numOrNull(props.NFIP_takeup_residential_NonSFHA),
+    lmi:               numOrNull(props.LMI) || 0,
+    renterPct:         numOrNull(pickProp(props, ['Ptg_renter','Percent_renter','renter_pct','renterPct','Renter'], /^(ptg_?)?renter(_?pct|_?percent)?$/i)),
+    nfipRenterTakeup:  numOrNull(pickProp(props, ['NFIP_Takeup_Renter_2024','NFIP_takeup_renter','NFIP_takeup_renter_2024','nfipRenterTakeup'], /nfip.*renter|renter.*(nfip|takeup)/i)),
+  };
+}
+
+function getVal(d, metric) {
+  if (metric === 'nfipSFHA') return d.nfipSFHA;
+  return d.pctSFHA;
+}
+function hasNfipSfhaData(d) { return d.nfipSFHA !== null && d.nfipSFHA !== undefined; }
+
+// Flags for the four risk thresholds, in priority order:
+// 1) % Structures in SFHA ≥ threshold   2) LMI ≥ threshold
+// 3) Renter % ≥ threshold               4) NFIP take-up (SFHA) ≤ threshold
+function getFlags(d) {
+  const fSfha   = d.pctSFHA >= thresholds.pctSFHA;
+  const fLmi    = d.lmi     >= thresholds.lmi;
+  const fRenter = (d.renterPct !== null && d.renterPct !== undefined) ? (d.renterPct >= thresholds.renter) : false;
+  const fNfip   = hasNfipSfhaData(d) ? (d.nfipSFHA <= thresholds.nfip) : false;
+  return { fSfha, fLmi, fRenter, fNfip };
+}
+function getRiskFactors(d) {
+  const { fSfha, fLmi, fRenter, fNfip } = getFlags(d);
+  return (fSfha?1:0) + (fLmi?1:0) + (fRenter?1:0) + (fNfip?1:0);
+}
+// Risk classification level: 3 = High (all 4 exceeded), 2 = Medium (exactly 3
+// exceeded AND % Structures in SFHA must be one of them — top-priority factor),
+// 1 = Watch (1–2 factors, or 3 factors that don't include SFHA share), 0 = Low risk.
+function getRiskLevel(d) {
+  const factors = getRiskFactors(d);
+  const { fSfha } = getFlags(d);
+  if (factors === 4) return 3;
+  if (factors === 3 && fSfha) return 2;
+  if (factors >= 1) return 1;
+  return 0;
+}
+function pct(v) { return (v === null || v === undefined) ? 'N/A' : v.toFixed(1) + '%'; }
+function fmt(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(0)+'K';
+  return Math.round(n).toLocaleString();
+}
+function shortGeoid(geoid) { return geoid ? geoid.slice(-4) : ''; }
+
+/* Color scales */
+const SCHEMES = {
+  pctSFHA: ["#EAF2FB","#CBE0F5","#A9CCEE","#82B4E4","#5C9BD9","#3A82CB","#2769B4","#185792","#104573","#0B3355"],
+  nfipSFHA:["#E6F6F6","#BEE8E8","#98DDDD","#6DCBCB","#40B6B6","#259E9E","#1C8282","#146767","#0E4E4E","#083535"],
+};
+// makeColorScale — for nfipSFHA, LOW take-up (worse protection) should render dark,
+// so the scheme array is reversed for that metric ("invert").
+function makeColorScale(metric, data) {
+  const invert = metric === 'nfipSFHA';
+  const vals = data.map(d => getVal(d, metric)).filter(v => v !== null && v !== undefined);
+  if (!vals.length) return () => '#ccc';
+  const [lo, hi] = [d3.min(vals), d3.max(vals)];
+  const scheme = invert ? [...SCHEMES[metric]].reverse() : SCHEMES[metric];
+  return d3.scaleQuantize([lo === hi ? 0 : lo, hi || 1], scheme);
+}
+function gradCSS(metric) {
+  const invert = metric === 'nfipSFHA';
+  const s = invert ? [...SCHEMES[metric]].reverse() : SCHEMES[metric];
+  return `linear-gradient(to right, ${s[0]}, ${s[s.length-1]})`;
+}
+function metricLabel(m) {
+  return { pctSFHA:'% Structures in SFHA', nfipSFHA:'NFIP take-up rate (in SFHA)' }[m] || m;
+}
+
+/* ════════════════════════════════════════════
+   LEAFLET MAP INITIALIZATION
+════════════════════════════════════════════ */
+
+// Active Leaflet layer references (cleared and rebuilt on community change)
+let bgLayer      = null;  // L.geoJSON for block group fills
+let outlineLayer = null;  // L.geoJSON for high-risk dashed borders
+let dotLayer     = null;  // L.layerGroup for income/take-up dots
+let labelLayer   = null;  // L.layerGroup for block group labels
+let boundaryLayer= null;  // L.geoJSON for county boundary
+let crsLayer     = null;  // L.geoJSON for Community Rating System cross-hatch
+
+function initLeafletMap() {
+  if (leafletMap) return;
+
+  leafletMap = L.map('leaflet-map', {
+    center: [36.7, -119.4],
+    zoom: 6,
+    zoomControl: true,
+    attributionControl: true,
+    preferCanvas: false, // keep SVG renderer so path styles + patterns work
+  });
+
+    // Esri Light Gray Canvas — clean light basemap, no API key required
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    maxZoom: 16,
+  }).addTo(leafletMap);
+
+  // Esri's reference layer adds place labels/roads back on top (Canvas base has none)
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 16,
+    pane: 'shadowPane', // keeps labels above the base tiles but below your markers/choropleth
+  }).addTo(leafletMap);
+
+  // Dots are laid out in screen pixels, so re-fit them to each block group after every zoom
+  let zoomRedrawTimer = null;
+  leafletMap.on('zoomend', () => {
+    clearTimeout(zoomRedrawTimer);
+    zoomRedrawTimer = setTimeout(() => { if (geoFeatures) redrawOverlay(); }, 60);
+  });
+
+  initAddressSearch();
+}
+
+/* ── Address search (OpenStreetMap Nominatim, limited to San Mateo County) ── */
+let addrPin = null;
+
+function pointInGeometry(lng, lat, geom) {
+  const inRing = ring => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if ((yi > lat) !== (yj > lat) && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  const inPoly = rings => inRing(rings[0]) && !rings.slice(1).some(inRing);
+  if (geom.type === 'Polygon') return inPoly(geom.coordinates);
+  if (geom.type === 'MultiPolygon') return geom.coordinates.some(inPoly);
+  return false;
+}
+
+function goToAddress(lat, lng, label) {
+  if (addrPin) { leafletMap.removeLayer(addrPin); addrPin = null; }
+  addrPin = L.marker([lat, lng], {
+    icon: L.divIcon({ className: 'addr-pin', html: '<div></div>', iconSize: [26, 26], iconAnchor: [13, 26] }),
+    keyboard: false, title: label || '',
+  }).addTo(leafletMap);
+  leafletMap.flyTo([lat, lng], 17, { duration: 1.0 });
+
+  // Select the block group that contains the address
+  const hit = (geoFeatures || []).find(f => f._data && f.geometry && pointInGeometry(lng, lat, f.geometry));
+  if (hit) {
+    selectedBg = hit._data.geoid;
+    if (typeof refreshBgStyles === 'function') refreshBgStyles();
+    selectBg(hit._data);
+    updateTopBgs();
+  }
+}
+
+function initAddressSearch() {
+  const box = document.getElementById('addr-search');
+  if (!box) return;
+  const form = document.getElementById('addr-form'), input = document.getElementById('addr-input');
+  const list = document.getElementById('addr-list'), clear = document.getElementById('addr-clear');
+  L.DomEvent.disableClickPropagation(box);
+  L.DomEvent.disableScrollPropagation(box);
+
+  const showMsg = t => { list.innerHTML = ''; const m = document.createElement('div'); m.className = 'as-msg'; m.textContent = t; list.appendChild(m); list.style.display = 'block'; };
+  const hide = () => { list.style.display = 'none'; list.innerHTML = ''; };
+
+  input.addEventListener('input', () => { clear.style.display = input.value ? 'block' : 'none'; });
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+  clear.addEventListener('click', () => {
+    input.value = ''; clear.style.display = 'none'; hide();
+    if (addrPin) { leafletMap.removeLayer(addrPin); addrPin = null; }
+    input.focus();
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = input.value.trim();
+    if (!q) return;
+    showMsg('Searching…');
+    try {
+      // viewbox = San Mateo County (west,north,east,south); bounded keeps results inside the county
+      const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=us&addressdetails=0'
+                + '&viewbox=-122.56,37.74,-122.06,37.10&bounded=1&q=' + encodeURIComponent(q);
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      let data = await res.json();
+      if (!data.length && !/san mateo|ca\b|california/i.test(q)) {
+        const res2 = await fetch(url.replace(/&q=.*$/, '') + '&q=' + encodeURIComponent(q + ', San Mateo County, California'));
+        if (res2.ok) data = await res2.json();
+      }
+      if (!data.length) { showMsg('No match found in San Mateo County. Try adding a street number and city.'); return; }
+      if (data.length === 1) { hide(); goToAddress(+data[0].lat, +data[0].lon, data[0].display_name); return; }
+      list.innerHTML = '';
+      data.forEach(r => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = r.display_name.replace(/, United States$/, '');
+        b.addEventListener('click', () => { hide(); input.value = b.textContent; clear.style.display = 'block'; goToAddress(+r.lat, +r.lon, r.display_name); });
+        list.appendChild(b);
+      });
+      list.style.display = 'block';
+    } catch (err) {
+      console.warn('Address search failed', err);
+      showMsg('Search is unavailable right now. Please try again in a moment.');
+    }
+  });
+}
+
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Inject a reusable diagonal-hatch <pattern> into Leaflet's SVG renderer so
+// CRS-participating block groups can be drawn cross-hatched rather than filled.
+function ensureHatchPattern() {
+  if (!leafletMap) return;
+  const pane = leafletMap.getPane('overlayPane');
+  const svg = pane && pane.querySelector('svg');
+  if (!svg) return;
+  if (svg.querySelector('#crsHatchPattern')) return;
+  let defs = svg.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS(SVG_NS, 'defs');
+    svg.insertBefore(defs, svg.firstChild);
+  }
+  const pattern = document.createElementNS(SVG_NS, 'pattern');
+  pattern.setAttribute('id', 'crsHatchPattern');
+  pattern.setAttribute('width', '6');
+  pattern.setAttribute('height', '6');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  pattern.setAttribute('patternTransform', 'rotate(45)');
+  const line = document.createElementNS(SVG_NS, 'line');
+  line.setAttribute('x1', '0'); line.setAttribute('y1', '0');
+  line.setAttribute('x2', '0'); line.setAttribute('y2', '6');
+  line.setAttribute('stroke', '#6B4A9E');
+  line.setAttribute('stroke-width', '2.5');
+  pattern.appendChild(line);
+  defs.appendChild(pattern);
+}
+
+/* ════════════════════════════════════════════
+   OVERLAY — built with native L.geoJSON
+   Leaflet automatically repositions its SVG pane
+   on every pan/zoom, so layers stay locked to the map.
+════════════════════════════════════════════ */
+
+function clearAllLayers() {
+  [bgLayer, outlineLayer, dotLayer, labelLayer, boundaryLayer, crsLayer].forEach(l => {
+    if (l) leafletMap.removeLayer(l);
+  });
+  bgLayer = outlineLayer = dotLayer = labelLayer = boundaryLayer = crsLayer = null;
+}
+
+// Return the geographic centroid [lat, lng] of a GeoJSON geometry
+function geoCentroid(geometry) {
+  let coords = [];
+  if (geometry.type === 'Polygon') coords = geometry.coordinates[0];
+  else if (geometry.type === 'MultiPolygon') coords = geometry.coordinates[0][0];
+  if (!coords.length) return null;
+  const lons = coords.map(c => c[0]);
+  const lats = coords.map(c => c[1]);
+  return [
+    (Math.min(...lats) + Math.max(...lats)) / 2,
+    (Math.min(...lons) + Math.max(...lons)) / 2,
+  ];
+}
+
+/* Interior anchor for a block group: the point deepest inside its largest polygon
+   (pole of inaccessibility) plus the radius of the largest circle that fits there.
+   Unlike a bounding-box centre, this always lies inside the shape, so overlay dots
+   stay on the correct block group even for thin, L-shaped or multi-part geometries. */
+function polyAnchor(geometry) {
+  if (!geometry) return null;
+  const polys = geometry.type === 'Polygon' ? [geometry.coordinates]
+              : geometry.type === 'MultiPolygon' ? geometry.coordinates : [];
+  if (!polys.length) return null;
+  const ringArea = r => { let a = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return Math.abs(a / 2); };
+  let best = polys[0], bestA = -1;
+  polys.forEach(p => { const a = ringArea(p[0]); if (a > bestA) { bestA = a; best = p; } });
+
+  // Project to local metres so distances are true
+  const lat0 = best[0].reduce((m, c) => m + c[1], 0) / best[0].length;
+  const lng0 = best[0].reduce((m, c) => m + c[0], 0) / best[0].length;
+  const kx = Math.cos(lat0 * Math.PI / 180) * 111320, ky = 110540;
+  const rings = best.map(r => r.map(c => [(c[0] - lng0) * kx, (c[1] - lat0) * ky]));
+
+  const segDist2 = (px, py, a, b) => {
+    let x = a[0], y = a[1], dx = b[0] - x, dy = b[1] - y;
+    if (dx || dy) { const t = ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy); if (t > 1) { x = b[0]; y = b[1]; } else if (t > 0) { x += dx * t; y += dy * t; } }
+    dx = px - x; dy = py - y; return dx * dx + dy * dy;
+  };
+  const pointDist = (px, py) => {            // signed: + inside, - outside
+    let inside = false, min = Infinity;
+    rings.forEach(r => {
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+        const a = r[i], b = r[j];
+        if ((a[1] > py) !== (b[1] > py) && px < (b[0] - a[0]) * (py - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+        min = Math.min(min, segDist2(px, py, a, b));
+      }
+    });
+    return (inside ? 1 : -1) * Math.sqrt(min);
+  };
+
+  const xs = rings[0].map(c => c[0]), ys = rings[0].map(c => c[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const size = Math.min(maxX - minX, maxY - minY) || 1;
+  let h = size / 2;
+  const mkCell = (x, y, hh) => { const d = pointDist(x, y); return { x, y, h: hh, d, max: d + hh * Math.SQRT2 }; };
+  let cells = [];
+  for (let x = minX; x < maxX; x += size) for (let y = minY; y < maxY; y += size) cells.push(mkCell(x + h, y + h, h));
+  let bestCell = mkCell((minX + maxX) / 2, (minY + maxY) / 2, 0);
+  cells.forEach(c => { if (c.d > bestCell.d) bestCell = c; });
+  const precision = Math.max(0.5, size / 200);
+  let guard = 0;
+  while (cells.length && guard++ < 4000) {
+    let bi = 0; cells.forEach((c, i) => { if (c.max > cells[bi].max) bi = i; });
+    const c = cells.splice(bi, 1)[0];
+    if (c.d > bestCell.d) bestCell = c;
+    if (c.max - bestCell.d <= precision) continue;
+    const hh = c.h / 2;
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx, sy]) => cells.push(mkCell(c.x + sx * hh, c.y + sy * hh, hh)));
+  }
+  return { lat: lat0 + bestCell.y / ky, lng: lng0 + bestCell.x / kx, r: Math.max(bestCell.d, 0) };
+}
+
+// Ground metres represented by one screen pixel at the current zoom
+function metersPerPixel(lat) {
+  return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, leafletMap.getZoom());
+}
+
+// Approximate pixel width of a feature at current zoom (used for label visibility)
+function geoPixelWidth(geometry) {
+  if (!leafletMap) return 0;
+  let coords = [];
+  if (geometry.type === 'Polygon') coords = geometry.coordinates[0];
+  else if (geometry.type === 'MultiPolygon') coords = geometry.coordinates[0][0];
+  if (!coords.length) return 0;
+  const lons = coords.map(c => c[0]);
+  const lats = coords.map(c => c[1]);
+  const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const p0 = leafletMap.latLngToContainerPoint([midLat, Math.min(...lons)]);
+  const p1 = leafletMap.latLngToContainerPoint([midLat, Math.max(...lons)]);
+  return Math.abs(p1.x - p0.x);
+}
+
+function redrawOverlay() {
+  if (!leafletMap || !geoFeatures) return;
+
+  clearAllLayers();
+
+  const colorScale = makeColorScale(choroMetric, currentBgData);
+  const fc = { type: 'FeatureCollection', features: geoFeatures };
+  const NODATA_COLOR = '#D7DBE0';
+
+  /* ── 1. Block group choropleth fills ── */
+  bgLayer = L.geoJSON(fc, {
+    style: feat => {
+      const d = feat._data;
+      if (!d) return { fillOpacity: 0, stroke: false };
+      const isSelected = selectedBg === d.geoid;
+      const val = getVal(d, choroMetric);
+      const noData = (val === null || val === undefined);
+      return {
+        fillColor:   noData ? NODATA_COLOR : colorScale(val),
+        fillOpacity: noData ? 0.5 : 0.72,
+        color:       isSelected ? '#0E2A47' : 'rgba(255,255,255,0.75)',
+        weight:      isSelected ? 2.5 : 0.8,
+        opacity:     1,
+      };
+    },
+    onEachFeature: (feat, layer) => {
+      const d = feat._data;
+      if (!d) return;
+      layer.on({
+        mouseover: e => { showTooltip(e.originalEvent, d); layer.setStyle({ fillOpacity: 0.9 }); },
+        mousemove: e => moveTooltip(e.originalEvent),
+        mouseout:  e => { hideTooltip(); bgLayer && bgLayer.resetStyle(layer); },
+        click:     e => {
+          selectedBg = d.geoid;
+          refreshBgStyles();
+          selectBg(d);
+          updateTopBgs();
+        },
+      });
+    },
+  }).addTo(leafletMap);
+
+  /* ── 2. High-risk dashed outlines ── */
+  if (layers.outline) {
+    const highRiskFeatures = geoFeatures.filter(f => f._data && getRiskFactors(f._data) >= hlMode);
+    if (highRiskFeatures.length) {
+      outlineLayer = L.geoJSON(
+        { type:'FeatureCollection', features: highRiskFeatures },
+        {
+          style: { fill: false, color: '#C0392B', weight: 2.5, dashArray: '6,4', opacity: 1 },
+          interactive: false,
+        }
+      ).addTo(leafletMap);
+    }
+  }
+
+  /* ── 3. Community boundary ── */
+  if (geoFeatures._boundary) {
+    boundaryLayer = L.geoJSON(geoFeatures._boundary, {
+      style: { fill: false, color: '#0E2A47', weight: 3, dashArray: null, opacity: 0.9 },
+      interactive: false,
+    }).addTo(leafletMap);
+  }
+
+  /* ── 4. Community Rating System cross-hatch overlay ── */
+  if (layers.crs && crsGeoData) {
+    ensureHatchPattern();
+    const crsFeatures = filterCrsFeaturesForCommunity(crsGeoData, currentCommunity);
+    if (crsFeatures.length) {
+      crsLayer = L.geoJSON(
+        { type: 'FeatureCollection', features: crsFeatures },
+        {
+          style: { fillColor: 'url(#crsHatchPattern)', fill: true, fillOpacity: 1, color: '#6B4A9E', weight: 1.2, opacity: 0.85 },
+          interactive: false,
+        }
+      ).addTo(leafletMap);
+    }
+  }
+
+  /* ── 5. Income + low take-up dots and block group labels (DivIcon markers) ── */
+  const markers = [];
+
+  geoFeatures.forEach(feat => {
+    if (!feat._data || !feat.geometry) return;
+    const d    = feat._data;
+    if (!feat._anchor) feat._anchor = polyAnchor(feat.geometry);
+    if (!feat._anchor) return;
+    const ctr  = [feat._anchor.lat, feat._anchor.lng];
+
+    // Overlay dots — placed at the block group's interior anchor and sized/arranged
+    // in pixels so they always fit inside the block group at the current zoom.
+    const dots = [];
+    if (layers.income && d.lmi >= thresholds.lmi) dots.push('#1B8E8E');
+    if (layers.renter && d.renterPct !== null && d.renterPct !== undefined && d.renterPct >= thresholds.renter) dots.push('#B8336A');
+    if (layers.lowtakeup && hasNfipSfhaData(d) && d.nfipSFHA <= thresholds.nfip) dots.push('#E07B2A');
+    if (dots.length) {
+      const R = feat._anchor.r / metersPerPixel(feat._anchor.lat);   // inscribed-circle radius, px
+      const n = dots.length;
+      const fit = n === 1 ? 1 : n === 2 ? 2 : 2.155;                  // cluster extent in dot radii
+      const r = Math.max(1.3, Math.min(4.5, (R * 0.85) / fit));
+      const sep = n === 1 ? 0 : n === 2 ? r : r * 1.155;              // centre-to-cluster-centre distance
+      const base = leafletMap.latLngToLayerPoint(ctr);
+      dots.forEach((color, k) => {
+        let dx = 0, dy = 0;
+        if (n === 2) dx = (k === 0 ? -sep : sep);
+        else if (n === 3) { const ang = (-90 + k * 120) * Math.PI / 180; dx = sep * Math.cos(ang); dy = sep * Math.sin(ang); }
+        const ll = leafletMap.layerPointToLatLng(base.add([dx, dy]));
+        markers.push(L.circleMarker(ll, {
+          radius: r, color: 'white', weight: r < 3 ? 0.6 : 1,
+          fillColor: color, fillOpacity: 1,
+          interactive: false,
+          pane: 'markerPane',
+        }));
+      });
+    }
+
+    // Block group label
+    if (layers.labels) {
+      const bw = geoPixelWidth(feat.geometry);
+      if (bw >= 22) {
+        markers.push(L.marker(ctr, {
+          icon: L.divIcon({
+            className: 'bg-label-div',
+            html: shortGeoid(d.geoid),
+            iconSize: null,
+            iconAnchor: [12, 6],
+          }),
+          interactive: false,
+          pane: 'tooltipPane', // above vectors, below popups
+        }));
+      }
+    }
+  });
+
+  dotLayer = L.layerGroup(markers).addTo(leafletMap);
+
+  /* ── Update legend UI ── */
+  const grad = gradCSS(choroMetric);
+  document.getElementById('legend-grad').style.background = grad;
+  document.getElementById('legend-title').textContent = metricLabel(choroMetric);
+  document.getElementById('sidebar-legend-ramp').style.background = grad;
+  document.getElementById('sidebar-legend-label').textContent = metricLabel(choroMetric);
+  document.getElementById('choro-legend').style.display = 'block';
+  const anyNoData = currentBgData.some(d => getVal(d, choroMetric) === null || getVal(d, choroMetric) === undefined);
+  document.getElementById('legend-nodata-row').style.display = (choroMetric === 'nfipSFHA' && anyNoData) ? 'flex' : 'none';
+  document.getElementById('leg-income').style.display     = layers.income    ? 'flex' : 'none';
+  document.getElementById('leg-renter').style.display      = layers.renter   ? 'flex' : 'none';
+  document.getElementById('leg-lowtakeup').style.display   = layers.lowtakeup? 'flex' : 'none';
+  document.getElementById('leg-outline').style.display     = layers.outline  ? 'flex' : 'none';
+  document.getElementById('leg-crs').style.display          = layers.crs     ? 'flex' : 'none';
+}
+
+// Efficiently restyle block group paths without full rebuild (used when selection changes)
+function refreshBgStyles() {
+  if (!bgLayer) return;
+  const colorScale = makeColorScale(choroMetric, currentBgData);
+  const NODATA_COLOR = '#D7DBE0';
+  bgLayer.eachLayer(layer => {
+    const d = layer.feature && layer.feature._data;
+    if (!d) return;
+    const isSelected = selectedBg === d.geoid;
+    const val = getVal(d, choroMetric);
+    const noData = (val === null || val === undefined);
+    layer.setStyle({
+      fillColor:   noData ? NODATA_COLOR : colorScale(val),
+      fillOpacity: noData ? 0.5 : 0.72,
+      color:       isSelected ? '#0E2A47' : 'rgba(255,255,255,0.75)',
+      weight:      isSelected ? 2.5 : 0.8,
+    });
+  });
+}
+
+/* ════════════════════════════════════════════
+   TOOLTIP (with donut chart)
+════════════════════════════════════════════ */
+function renderDonut(svgId, inCount, outCount) {
+  const svg = document.getElementById(svgId);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  const w = 120, h = 120, cx = w/2, cy = h/2, rOuter = 52, rInner = 30;
+  const total = (inCount||0) + (outCount||0);
+
+  const g = document.createElementNS(SVG_NS, 'g');
+  g.setAttribute('transform', `translate(${cx},${cy})`);
+  svg.appendChild(g);
+
+  if (total <= 0) {
+    const circle = document.createElementNS(SVG_NS, 'circle');
+    circle.setAttribute('r', rOuter);
+    circle.setAttribute('fill', 'none');
+    circle.setAttribute('stroke', '#E2E6EB');
+    circle.setAttribute('stroke-width', rOuter - rInner);
+    g.appendChild(circle);
+  } else {
+    const dataset = [
+      { value: inCount||0,  color: '#1B5FA8' },
+      { value: outCount||0, color: '#26BFBF' },
+    ];
+    const pieGen = d3.pie().value(d => d.value).sort(null);
+    const arcGen = d3.arc().innerRadius(rInner).outerRadius(rOuter).padAngle(0.015);
+    pieGen(dataset).forEach((seg, i) => {
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', arcGen(seg));
+      path.setAttribute('fill', dataset[i].color);
+      g.appendChild(path);
+    });
+  }
+
+  const pctIn = total > 0 ? Math.round((inCount/total)*100) : 0;
+  const text = document.createElementNS(SVG_NS, 'text');
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('dy', '0.05em');
+  text.setAttribute('font-size', '19');
+  text.setAttribute('font-weight', '800');
+  text.setAttribute('font-family', "'DM Mono', monospace");
+  text.setAttribute('fill', '#0E2A47');
+  text.textContent = pctIn + '%';
+  g.appendChild(text);
+  const sub = document.createElementNS(SVG_NS, 'text');
+  sub.setAttribute('text-anchor', 'middle');
+  sub.setAttribute('dy', '1.35em');
+  sub.setAttribute('font-size', '8.5');
+  sub.setAttribute('font-family', "'Inter', sans-serif");
+  sub.setAttribute('fill', '#6b7280');
+  sub.textContent = 'in SFHA';
+  g.appendChild(sub);
+}
+
+function setHBar(fillId, value, maxValue) {
+  const el = document.getElementById(fillId);
+  if (value === null || value === undefined) { el.style.width = '0%'; return; }
+  el.style.width = Math.max(2, Math.min(100, (value/maxValue)*100)) + '%';
+}
+
+function renderCrsBlock(container, geoid) {
+  const info = crsInfo(geoid);
+  if (!info.entries.length) {
+    container.innerHTML = `<span class="tt-crs-empty">Not in a CRS community</span>`;
+    return;
+  }
+  container.innerHTML = info.entries.map(e => `
+    <div class="tt-crs-row"><span class="tt-crs-name">${e.name}</span><span class="tt-crs-count">${e.count.toLocaleString()} structures</span></div>
+  `).join('');
+}
+
+function showTooltip(event, d) {
+  const tt = document.getElementById('tooltip');
+
+  document.getElementById('tt-name').textContent = 'Block Group ' + shortGeoid(d.geoid) + ' · San Mateo County';
+  document.getElementById('tt-community').textContent = 'GEOID ' + d.geoid + (d.community ? ' · ' + d.community : '');
+
+  renderDonut('tt-pie', d.structuresSFHA, d.structuresNonSFHA);
+  document.getElementById('tt-pie-in').textContent  = (d.structuresSFHA||0).toLocaleString();
+  document.getElementById('tt-pie-out').textContent = (d.structuresNonSFHA||0).toLocaleString();
+
+  document.getElementById('tt-nfip-all').textContent     = pct(d.nfipAll);
+  document.getElementById('tt-nfip-sfha').textContent    = pct(d.nfipSFHA);
+  document.getElementById('tt-nfip-nonsfha').textContent = pct(d.nfipNonSFHA);
+  document.getElementById('tt-nfip-renter').textContent  = pct(d.nfipRenterTakeup);
+  document.getElementById('tt-lmi').textContent          = pct(d.lmi);
+  document.getElementById('tt-renter').textContent       = pct(d.renterPct);
+
+  setHBar('tt-bar-nfip-all',     d.nfipAll,     100);
+  setHBar('tt-bar-nfip-sfha',    d.nfipSFHA,    100);
+  setHBar('tt-bar-nfip-nonsfha', d.nfipNonSFHA, 100);
+  setHBar('tt-bar-nfip-renter',  d.nfipRenterTakeup, 100);
+
+  document.getElementById('tt-pop').textContent         = d.population.toLocaleString();
+
+  renderCrsBlock(document.getElementById('tt-crs'), d.geoid);
+
+  tt.style.display = 'block';
+  moveTooltip(event);
+}
+function moveTooltip(event) {
+  const tt   = document.getElementById('tooltip');
+  const wrap = document.getElementById('map-container');
+  const rect = wrap.getBoundingClientRect();
+  let x = event.clientX - rect.left + 16;
+  let y = event.clientY - rect.top  + 16;
+  if (x + 500 > wrap.clientWidth)  x = event.clientX - rect.left - 516;
+  if (y + 380 > wrap.clientHeight) y = Math.max(4, event.clientY - rect.top - 390);
+  tt.style.left = x + 'px';
+  tt.style.top  = y + 'px';
+}
+function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+/* ════════════════════════════════════════════
+   BLOCK GROUP SPOTLIGHT
+════════════════════════════════════════════ */
+function selectBg(d) {
+  document.getElementById('spotlight-empty').style.display   = 'none';
+  document.getElementById('spotlight-content').style.display = 'block';
+  const level = getRiskLevel(d);
+  document.getElementById('sp-name').textContent = 'Block Group ' + shortGeoid(d.geoid);
+  document.getElementById('sp-sub').textContent  = `GEOID ${d.geoid} · ${d.community || ''}`;
+  document.getElementById('sp-pctsfha').textContent      = pct(d.pctSFHA);
+  document.getElementById('sp-nfipsfha').textContent     = pct(d.nfipSFHA);
+  document.getElementById('sp-nfipnonsfha').textContent  = pct(d.nfipNonSFHA);
+  document.getElementById('sp-nfiprenter').textContent   = pct(d.nfipRenterTakeup);
+  document.getElementById('sp-lmi').textContent          = pct(d.lmi);
+  document.getElementById('sp-renter').textContent       = pct(d.renterPct);
+  document.getElementById('sp-structures').textContent      = d.structures.toLocaleString();
+  document.getElementById('sp-structures-sfha').textContent  = d.structuresSFHA.toLocaleString();
+  document.getElementById('sp-pop').textContent          = d.population.toLocaleString();
+  document.getElementById('bar-pctsfha').style.width     = Math.min(100, d.pctSFHA) + '%';
+  document.getElementById('bar-nfipsfha').style.width    = Math.min(100, d.nfipSFHA||0) + '%';
+  document.getElementById('bar-nfipnonsfha').style.width = Math.min(100, d.nfipNonSFHA||0) + '%';
+  document.getElementById('bar-nfiprenter').style.width  = Math.min(100, d.nfipRenterTakeup||0) + '%';
+  document.getElementById('bar-lmi').style.width         = Math.min(100, d.lmi) + '%';
+  document.getElementById('bar-renter').style.width      = Math.min(100, d.renterPct||0) + '%';
+
+  const badge = document.getElementById('sp-badge');
+  badge.innerHTML = level === 3
+    ? `<span class="risk-badge risk-high">⚠ High risk — all 3 factors</span>`
+    : level === 2
+    ? `<span class="risk-badge risk-med">◉ Medium risk — 2 factors</span>`
+    : level === 1
+    ? `<span class="risk-badge risk-watch">✓ Watch — 1 factor</span>`
+    : `<span class="risk-badge risk-low">✓ Low risk</span>`;
+
+  renderCrsBlock(document.getElementById('sp-crs'), d.geoid);
+}
+
+/* ════════════════════════════════════════════
+   METRICS + TOP BLOCK GROUPS
+════════════════════════════════════════════ */
+function updateMetrics() {
+  const high = currentBgData.filter(d => getRiskFactors(d) >= hlMode);
+  document.getElementById('m-high').textContent = currentBgData.length ? high.length : '—';
+  const totalStructures = d3.sum(currentBgData, d => d.structures);
+  const totalStructuresSFHA = d3.sum(currentBgData, d => d.structuresSFHA);
+  document.getElementById('m-rate').textContent = totalStructures > 0
+    ? (totalStructuresSFHA / totalStructures * 100).toFixed(1) + '%' : '—';
+  const pop = high.reduce((s,d) => s + d.population, 0);
+  document.getElementById('m-pop').textContent  = currentBgData.length ? fmt(pop) : '—';
+
+  // Community Rating System summary for the selected community
+  const crsEl = document.getElementById('m-crs');
+  const crsSubEl = document.getElementById('m-crs-sub');
+  if (!currentBgData.length) {
+    crsEl.textContent = '—';
+    crsEl.className = 'metric-value mv-white metric-value-sm';
+    crsSubEl.textContent = 'San Mateo County';
+  } else {
+    let totalCrsStructures = 0;
+    const names = new Set();
+    currentBgData.forEach(d => {
+      const info = crsInfo(d.geoid);
+      totalCrsStructures += info.total;
+      info.entries.forEach(e => names.add(e.name));
+    });
+    if (names.size) {
+      crsEl.textContent = `${fmt(totalCrsStructures)} structures`;
+      crsEl.className = 'metric-value mv-crs-yes metric-value-sm';
+      crsSubEl.textContent = `${names.size} CRS ${names.size!==1?'communities':'community'}`;
+    } else {
+      crsEl.textContent = 'None found';
+      crsEl.className = 'metric-value mv-crs-no metric-value-sm';
+      crsSubEl.textContent = 'No CRS communities in this area';
+    }
+  }
+}
+
+function updateTopBgs() {
+  const container = document.getElementById('top-bgs');
+  if (!container) return;
+  if (!currentBgData.length) {
+    container.innerHTML = '<div class="empty-state"><div class="es-icon">📊</div><span>Loading San Mateo County…</span></div>';
+    return;
+  }
+  const sorted = [...currentBgData].sort((a,b) => {
+    const lvlDiff = getRiskLevel(b) - getRiskLevel(a);
+    if (lvlDiff !== 0) return lvlDiff;
+    if (b.pctSFHA !== a.pctSFHA) return b.pctSFHA - a.pctSFHA;
+    if (b.lmi !== a.lmi) return b.lmi - a.lmi;
+    return (a.nfipSFHA ?? 100) - (b.nfipSFHA ?? 100);
+  }).slice(0,8);
+  container.innerHTML = '';
+  sorted.forEach((d, i) => {
+    const level  = getRiskLevel(d);
+    const cls    = level===3?'score-red':level===2?'score-amber':level===1?'score-teal':'score-green';
+    const label  = { 3:'High', 2:'Medium', 1:'Watch', 0:'Low' }[level];
+    const div = document.createElement('div');
+    div.className = 'bg-item' + (selectedBg===d.geoid ? ' selected' : '');
+    div.innerHTML = `<span class="bg-rank">#${i+1}</span><span class="bg-code">${shortGeoid(d.geoid)}<span class="bg-sub">${d.community || ''}</span></span><span class="bg-score ${cls}">${label}</span>`;
+    div.onclick = () => {
+      selectedBg = d.geoid;
+      refreshBgStyles();
+      selectBg(d);
+      updateTopBgs();
+      // Pan map to the selected block group
+      if (bgLayer) {
+        bgLayer.eachLayer(layer => {
+          if (layer.feature && layer.feature._data && layer.feature._data.geoid === d.geoid) {
+            leafletMap.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 14 });
+          }
+        });
+      }
+    };
+    container.appendChild(div);
+  });
+}
+
+/* ════════════════════════════════════════════
+   LAYER TOGGLE
+════════════════════════════════════════════ */
+function toggleLayer(name) {
+  layers[name] = !layers[name];
+  const colorMap = { income:'on-teal', renter:'on-renter', lowtakeup:'on-amber', outline:'on-red', labels:'on-navy', crs:'on-purple' };
+  const tog = document.getElementById('tog-'+name);
+  if (tog) tog.className = 'toggle' + (layers[name] ? ' ' + colorMap[name] : '');
+
+  if (name === 'crs' && layers.crs) {
+    loadCrsData().then(() => redrawOverlay());
+  } else {
+    redrawOverlay();
+  }
+}
+
+/* ════════════════════════════════════════════
+   DATA LOADING — SanMateo_bg_tool.json (block group geography + attributes)
+   and CRS_SanMateo.json (Community Rating System overlay geometry)
+════════════════════════════════════════════ */
+let bgGeoCache = null;      // cached full SanMateo_bg_tool.json FeatureCollection
+let bgGeoLoadPromise = null;
+let crsGeoData = null;      // cached full CRS_SanMateo.json (array of features)
+let crsGeoLoadPromise = null;
+
+function fetchBgGeoJSON() {
+  if (bgGeoCache) return Promise.resolve(bgGeoCache);
+  if (bgGeoLoadPromise) return bgGeoLoadPromise;
+  bgGeoLoadPromise = fetch('./SanMateo_bg_tool.json').then(r => r.json()).then(gj => { bgGeoCache = gj; return gj; });
+  return bgGeoLoadPromise;
+}
+
+function loadCrsData() {
+  if (crsGeoData) return Promise.resolve(crsGeoData);
+  if (crsGeoLoadPromise) return crsGeoLoadPromise;
+  crsGeoLoadPromise = fetch('./CRS_SanMateo.json')
+    .then(r => r.json())
+    .then(gj => {
+      crsGeoData = (gj && gj.features) ? gj.features : (Array.isArray(gj) ? gj : []);
+      return crsGeoData;
+    })
+    .catch(err => {
+      console.warn('Could not load CRS_SanMateo.json', err);
+      crsGeoData = [];
+      return crsGeoData;
+    });
+  return crsGeoLoadPromise;
+}
+
+// CRS_SanMateo.json already covers only San Mateo County.
+function filterCrsFeaturesForCommunity(features) {
+  return features || [];
+}
+
+/* ════════════════════════════════════════════
+   LOAD GEOGRAPHY from SanMateo_bg_tool.json
+════════════════════════════════════════════ */
+function loadCommunityMap(communityKey) {
+  const meta = COMMUNITY_META[communityKey];
+  if (!meta) return;
+
+  document.getElementById('no-community').classList.add('hidden');
+  document.getElementById('map-loading').classList.add('show');
+  document.getElementById('map-loading').innerHTML = `<div class="spinner"></div><span>Loading block group geography…</span>`;
+  document.getElementById('choro-legend').style.display = 'none';
+
+  // Fly Leaflet map to the community
+  leafletMap.flyTo(meta.center, meta.zoom, { duration: 1.0 });
+
+  Promise.all([
+    fetchBgGeoJSON(),
+    fetch('./CA_county_boundaries.json').then(r => r.json()).catch(() => null),
+    layers.crs ? loadCrsData() : Promise.resolve(null),
+    CRS_READY,
+  ])
+  .then(([bgGeo, boundaryData]) => {
+    const features = (bgGeo.features || []);
+
+    features.forEach(f => { f._data = normalizeBg(f.properties); });
+
+    geoFeatures = features;
+    currentBgData = features.map(f => f._data);
+
+    // Attach boundary as a property on the array
+    if (boundaryData) {
+      const boundary = boundaryData.features
+        ? boundaryData.features.find(f => String(f.properties.GEOID) === String(meta.fips))
+        : null;
+      geoFeatures._boundary = boundary || null;
+    }
+
+    document.getElementById('map-loading').classList.remove('show');
+    redrawOverlay();
+    updateMetrics();
+    updateTopBgs();
+  })
+  .catch(err => {
+    // If external files aren't present, show placeholder message
+    document.getElementById('map-loading').innerHTML =
+      `<div style="text-align:center;padding:20px;">
+        <p style="color:var(--red);font-size:12px;margin-bottom:8px;">Could not load block group boundaries.</p>
+        <p style="color:var(--text2);font-size:11px;">Host SanMateo_bg_tool.json alongside this file.<br>Data and metrics are still available in Table / Definitions views once loaded.</p>
+      </div>`;
+    console.warn(err);
+  });
+}
+
+/* ════════════════════════════════════════════
+   COMMUNITY CHANGE
+════════════════════════════════════════════ */
+function loadNonMapCommunityData(communityKey) {
+  const meta = COMMUNITY_META[communityKey];
+  if (!meta) return;
+  Promise.all([fetchBgGeoJSON(), CRS_READY]).then(([bgGeo]) => {
+    const features = (bgGeo.features || []);
+    features.forEach(f => { f._data = normalizeBg(f.properties); });
+    geoFeatures = features;
+    currentBgData = features.map(f => f._data);
+    updateMetrics();
+    renderCurrentNonMapView();
+  }).catch(err => console.warn(err));
+}
+
+function initSanMateo() {
+  currentCommunity = COMMUNITY_KEY;
+  selectedBg = null;
+  geoFeatures = null;
+  currentBgData = [];
+  if (currentView === 'map') loadCommunityMap(currentCommunity);
+  else loadNonMapCommunityData(currentCommunity);
+}
+
+/* ════════════════════════════════════════════
+   CHOROPLETH METRIC SWITCH
+════════════════════════════════════════════ */
+document.querySelectorAll('input[name="choro-metric"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    if (this.checked) {
+      choroMetric = this.value;
+      redrawOverlay();
+    }
+  });
+});
+
+/* ════════════════════════════════════════════
+   VIEW SWITCHING — uses display:none/block
+   Map is NEVER destroyed
+════════════════════════════════════════════ */
+function setView(v) {
+  currentView = v;
+
+  // Update tab buttons
+  ['map','table','chart'].forEach(n =>
+    document.getElementById('btn-'+n).classList.toggle('active', n===v)
+  );
+
+  const viewArea = document.getElementById('view-area');
+
+  if (v === 'map') {
+    document.getElementById('view-map').style.display   = 'contents';
+    document.getElementById('view-table').style.display = 'none';
+    document.getElementById('view-table').classList.remove('active');
+    document.getElementById('view-chart').style.display = 'none';
+    document.getElementById('view-chart').classList.remove('active');
+    viewArea.style.gridTemplateColumns = '1fr 280px';
+
+    // Tell Leaflet to re-measure its container size
+    if (leafletMap) {
+      setTimeout(() => {
+        leafletMap.invalidateSize();
+        redrawOverlay();
+        // If community was changed while in another view, load map now
+        if (currentCommunity && !geoFeatures) {
+          loadCommunityMap(currentCommunity);
+        }
+      }, 50);
+    }
+  } else {
+    document.getElementById('view-map').style.display   = 'none';
+    viewArea.style.gridTemplateColumns = '1fr';
+
+    if (v === 'table') {
+      document.getElementById('view-chart').style.display = 'none';
+      document.getElementById('view-chart').classList.remove('active');
+      document.getElementById('view-table').style.display = 'flex';
+      document.getElementById('view-table').classList.add('active');
+    } else {
+      document.getElementById('view-table').style.display = 'none';
+      document.getElementById('view-table').classList.remove('active');
+      document.getElementById('view-chart').style.display = 'grid';
+      document.getElementById('view-chart').classList.add('active');
+    }
+
+    renderCurrentNonMapView();
+  }
+}
+
+function renderCurrentNonMapView() {
+  if (currentView === 'table') renderTableView();
+  else if (currentView === 'chart') renderDefinitionsView();
+}
+
+['map','table','chart'].forEach(v => {
+  document.getElementById('btn-'+v).addEventListener('click', () => setView(v));
+});
+
+/* ════════════════════════════════════════════
+   CONTROLS — risk threshold sliders
+════════════════════════════════════════════ */
+document.getElementById('sl-pctsfha').addEventListener('input', function() {
+  thresholds.pctSFHA = +this.value;
+  document.getElementById('sv-pctsfha').textContent = this.value + '%';
+  redrawOverlay(); updateMetrics(); updateTopBgs();
+});
+document.getElementById('sl-lmi').addEventListener('input', function() {
+  thresholds.lmi = +this.value;
+  document.getElementById('sv-lmi').textContent = this.value + '%';
+  redrawOverlay(); updateMetrics(); updateTopBgs();
+});
+document.getElementById('sl-renter').addEventListener('input', function() {
+  thresholds.renter = +this.value;
+  document.getElementById('sv-renter').textContent = this.value + '%';
+  redrawOverlay(); updateMetrics(); updateTopBgs();
+});
+document.getElementById('sl-nfip').addEventListener('input', function() {
+  thresholds.nfip = +this.value;
+  document.getElementById('sv-nfip').textContent = this.value + '%';
+  redrawOverlay(); updateMetrics(); updateTopBgs();
+});
+
+/* ════════════════════════════════════════════
+   TABLE VIEW
+════════════════════════════════════════════ */
+function renderTableView() {
+  const area = document.getElementById('view-table');
+  if (!area) return;
+  const meta = COMMUNITY_META[currentCommunity];
+  const title = meta ? meta.label : 'No community selected';
+
+  if (!currentBgData.length) {
+    area.innerHTML = `<div class="table-header-bar"><div><div class="table-title">Loading San Mateo County…</div><div class="table-subtitle">Data is still loading — please try again in a moment.</div></div></div>`;
+    return;
+  }
+
+  const cols = [
+    { key:'geoid',             label:'GEOID',                 numeric:false },
+    { key:'community',         label:'Community',             numeric:false },
+    { key:'pctSFHA',           label:'% in SFHA',             numeric:true  },
+    { key:'nfipSFHA',          label:'NFIP Take-up (SFHA)',   numeric:true  },
+    { key:'nfipNonSFHA',       label:'NFIP Take-up (Non-SFHA)',numeric:true },
+    { key:'nfipRenterTakeup',  label:'NFIP Take-up (Renters)',numeric:true  },
+    { key:'lmi',               label:'LMI %',                 numeric:true  },
+    { key:'renterPct',         label:'Renter %',              numeric:true  },
+    { key:'structures',        label:'Structures',            numeric:true  },
+    { key:'structuresSFHA',    label:'Structures in SFHA',    numeric:true  },
+    { key:'population',        label:'Population',            numeric:true  },
+    { key:'crs',               label:'CRS Structures',        numeric:true  },
+    { key:'factors',           label:'Risk Level',            numeric:true  },
+  ];
+
+  function sortData(data) {
+    return [...data].sort((a,b) => {
+      let va = sortCol==='factors' ? getRiskFactors(a) : sortCol==='crs' ? crsInfo(a.geoid).total : a[sortCol];
+      let vb = sortCol==='factors' ? getRiskFactors(b) : sortCol==='crs' ? crsInfo(b.geoid).total : b[sortCol];
+      if (va === null || va === undefined) va = -Infinity;
+      if (vb === null || vb === undefined) vb = -Infinity;
+      if (typeof va==='string') { va=va.toLowerCase(); vb=vb.toLowerCase(); }
+      return va < vb ? sortDir : va > vb ? -sortDir : 0;
+    });
+  }
+
+  function render() {
+    const sorted = sortData(currentBgData);
+    const th = cols.map(c => {
+      const cls = sortCol===c.key ? (sortDir===-1?'sort-desc':'sort-asc') : '';
+      return `<th class="${cls}" data-key="${c.key}">${c.label}</th>`;
+    }).join('');
+    const rows = sorted.map(d => {
+      const level    = getRiskLevel(d);
+      const rowCls   = level===3?'high-risk':level===2?'med-risk':'';
+      const badgeCls = {3:'tbl-high', 2:'tbl-med', 1:'tbl-watch', 0:'tbl-lower'}[level];
+      const badgeLbl = {3:'High', 2:'Medium', 1:'Watch', 0:'Low'}[level];
+      const { fSfha, fLmi, fRenter, fNfip } = getFlags(d);
+      const sfhaCls = fSfha ? 'flag' : '';
+      const lmiCls  = fLmi  ? 'flag-amber' : '';
+      const renterCls = fRenter ? 'flag-amber' : '';
+      const nfipCls = fNfip ? 'flag-amber' : '';
+      const crs = crsInfo(d.geoid);
+      return `<tr class="${rowCls}">
+        <td class="mono" style="font-weight:700;color:var(--navy);">${d.geoid}</td>
+        <td>${d.community || ''}</td>
+        <td class="mono ${sfhaCls}">${pct(d.pctSFHA)}</td>
+        <td class="mono ${nfipCls}">${pct(d.nfipSFHA)}</td>
+        <td class="mono" style="color:var(--text2);">${pct(d.nfipNonSFHA)}</td>
+        <td class="mono" style="color:var(--text2);">${pct(d.nfipRenterTakeup)}</td>
+        <td class="mono ${lmiCls}">${pct(d.lmi)}</td>
+        <td class="mono ${renterCls}">${pct(d.renterPct)}</td>
+        <td class="mono" style="color:var(--text2);">${d.structures.toLocaleString()}</td>
+        <td class="mono" style="color:var(--text2);">${d.structuresSFHA.toLocaleString()}</td>
+        <td class="mono" style="color:var(--text2);">${d.population.toLocaleString()}</td>
+        <td class="mono" style="color:var(--text2);">${crs.total.toLocaleString()}</td>
+        <td><span class="tbl-badge ${badgeCls}">${badgeLbl}</span></td>
+      </tr>`;
+    }).join('');
+
+    area.innerHTML = `
+      <div class="table-header-bar">
+        <div>
+          <div class="table-title">${title} — Block Group Flood Risk Data</div>
+          <div class="table-subtitle">${currentBgData.length} block groups · Click column headers to sort</div>
+        </div>
+        <button class="export-btn" onclick="exportCsv()">⬇ Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>${th}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+    area.querySelectorAll('th[data-key]').forEach(th => {
+      th.addEventListener('click', () => {
+        const k = th.dataset.key;
+        if (sortCol===k) sortDir*=-1;
+        else { sortCol=k; sortDir=(k==='geoid'||k==='community')?1:-1; }
+        render();
+      });
+    });
+  }
+  render();
+}
+
+/* ════════════════════════════════════════════
+   DEFINITIONS VIEW
+════════════════════════════════════════════ */
+function renderDefinitionsView() {
+  const area = document.getElementById('view-chart');
+  if (!area) return;
+
+  const rows = VARIABLE_DEFINITIONS.map(d => `
+    <tr>
+      <td style="font-weight:700;color:var(--navy);white-space:nowrap;">${d.variable}</td>
+      <td>${d.definition}</td>
+      <td style="color:var(--text2);">${d.source}</td>
+    </tr>`).join('');
+
+  const sourceItems = [
+    { label: 'NFIP residential contract-in-force', text: 'OpenFEMA dataset NFIP Redacted Policies - v3. Residential contracts only.', url: 'https://www.fema.gov/openfema-data-page/nfip-redacted-policies-v3' },
+    { label: 'Residential structures', text: 'USACE National Structure Inventory (NSI) 2022 dataset. Residential only.', url: 'https://www.hec.usace.army.mil/confluence/nsi' },
+    { label: 'Community Rating System', text: 'OpenFEMA dataset NFIP Community Layer.', url: 'https://www.fema.gov/openfema-data-page/nfip-community-layer-comprehensive-v1' },
+    { label: 'Flood zones', text: 'FEMA National Flood Hazard Layer (NFHL). Special Flood Hazard Areas (SFHAs) are labeled as Zone A or Zone V.', url: 'https://www.fema.gov/flood-maps/national-flood-hazard-layer' },
+    { label: 'Block group-level demographic and socioeconomic data', text: 'US Census Bureau\'s 2020-2024 American Community Survey (ACS) 5-year data.', url: 'https://data.census.gov/' },
+    { label: 'Census block group boundaries', text: '2020 cartographic boundary files from the U.S. Census Bureau.', url: 'https://www.census.gov/geographies/reference-maps/2020/geo/2020-census-block-maps.html' },
+  ];
+  const sourceBullets = sourceItems.map(it => {
+    const label = it.url
+      ? `<a href="${it.url}" target="_blank" rel="noopener"><strong>${it.label}</strong></a>`
+      : `<strong>${it.label}</strong>`;
+    return `<li>${label}: ${it.text}</li>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="table-header-bar">
+      <div>
+        <div class="table-title">Variable Definitions &amp; Data Sources</div>
+        <div class="table-subtitle">Reference for every metric used across the Map and Table views</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Variable</th><th>Definition</th><th>Data Source</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="sources-card">
+        <div class="sources-card-title">Data Sources</div>
+        <ul class="sources-bullets">${sourceBullets}</ul>
+      </div>
+    </div>`;
+}
+
+/* ════════════════════════════════════════════
+   EXPORT
+════════════════════════════════════════════ */
+function exportCsv() {
+  if (!currentBgData.length) { alert('San Mateo County data is still loading — please try again in a moment.'); return; }
+  const header = 'GEOID,Community,% Structures in SFHA,NFIP Take-up Overall,NFIP Take-up SFHA,NFIP Take-up Non-SFHA,NFIP Take-up Renters,LMI %,Renter %,Structures,Structures in SFHA,Structures outside SFHA,Population,CRS Structures,Risk Level\n';
+  const rows = currentBgData.map(d => {
+    const levelLabel = { 3:'High', 2:'Medium', 1:'Watch', 0:'Low' }[getRiskLevel(d)];
+    const crs = crsInfo(d.geoid).total;
+    const nfipAll = d.nfipAll ?? '';
+    const nfipSfha = d.nfipSFHA ?? '';
+    const nfipNon = d.nfipNonSFHA ?? '';
+    const nfipRenter = d.nfipRenterTakeup ?? '';
+    const renterPct = d.renterPct ?? '';
+    return `"${d.geoid}","${d.community || ''}",${d.pctSFHA},${nfipAll},${nfipSfha},${nfipNon},${nfipRenter},${d.lmi},${renterPct},${d.structures},${d.structuresSFHA},${d.structuresNonSFHA},${d.population},${crs},${levelLabel}`;
+  }).join('\n');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([header+rows],{type:'text/csv'})),
+    download: `flood-risk-${currentCommunity||'data'}.csv`
+  });
+  a.click();
+}
+
+
+/* ════════════════════════════════════════════
+   INIT — run on page load
+════════════════════════════════════════════ */
+function syncRangeFill(el) {
+  const min = +el.min || 0, max = +el.max || 100;
+  el.style.setProperty('--fill', ((el.value - min) / (max - min) * 100) + '%');
+}
+window.addEventListener('DOMContentLoaded', () => {
+  initLeafletMap();
+  initSanMateo();
+  document.querySelectorAll('input[type=range]').forEach(el => {
+    syncRangeFill(el);
+    el.addEventListener('input', () => syncRangeFill(el));
+  });
+});
+
+window.addEventListener('resize', () => {
+  if (leafletMap) leafletMap.invalidateSize();
+  if (geoFeatures) redrawOverlay();
+});
+</script>
+</body>
+</html>
